@@ -1,0 +1,15 @@
+{
+  "name": "Partnership",
+  "short_name": "Partnership",
+  "description": "Track the people you support in prayer and giving",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F3EC",
+  "theme_color": "#22301F",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Partnership</title>
+<meta name="description" content="Track the people you support in prayer and giving" />
+<meta name="theme-color" content="#22301F" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Partnership" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F6F3EC;
+    --surface: #FFFFFF;
+    --ink: #22301F;
+    --ink-soft: #4B5A45;
+    --hairline: #DCD5C3;
+    --hairline-strong: #C7BEA6;
+    --gold: #C99A3D;
+    --gold-deep: #A87E2F;
+    --moss: #5F7052;
+    --brick: #A6402C;
+    --grey-row: #ECE9E0;
+    --grey-text: #93917E93;
+    --shadow-modal: 0 24px 48px -12px rgba(34,48,31,0.35);
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-full: 999px;
+    --serif: 'Spectral', Georgia, serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  body{
+    min-height: 100vh;
+    padding-bottom: 96px;
+  }
+
+  .wrap{
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 40px 24px 24px;
+  }
+
+  header.hero{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 20px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  header.hero h1{
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 40px;
+    line-height: 1.05;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  header.hero p{
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 15px;
+    max-width: 46ch;
+  }
+
+  nav.tabs{
+    display:flex;
+    gap: 22px;
+    padding-bottom: 2px;
+  }
+
+  nav.tabs button{
+    appearance:none;
+    background:none;
+    border:none;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 6px 2px 12px;
+    cursor:pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -22px;
+  }
+
+  nav.tabs button.active{
+    color: var(--ink);
+    border-bottom-color: var(--gold);
+  }
+
+  nav.tabs button:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible{
+    outline: 2px solid var(--gold-deep);
+    outline-offset: 2px;
+  }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  /* ---- cycle bar ---- */
+  .cycle-bar{
+    display:flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 26px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+  }
+
+  .field-inline{
+    display:flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .field-inline label{
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .field-inline select{
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    cursor: pointer;
+  }
+
+  .field-inline select:focus-visible{
+    outline: 2px solid var(--gold-deep);
+    outline-offset: 2px;
+  }
+
+  #new-cycle-btn{
+    padding: 9px 16px;
+    font-size: 13.5px;
+  }
+
+  /* ---- table ---- */
+  .table-scroll{
+    margin-top: 20px;
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+  }
+
+  table{
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+  }
+
+  thead th{
+    text-align:left;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--hairline-strong);
+    white-space: nowrap;
+  }
+
+  thead th.center, tbody td.center{ text-align:center; }
+
+  tbody td{
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 14.5px;
+    vertical-align: middle;
+  }
+
+  tbody tr{ transition: background-color 0.25s ease; }
+  tbody tr.prayed{ background: var(--grey-row); }
+  tbody tr.prayed td{ color: #7C7A6D; }
+  tbody tr.prayed .name-cell strong{ color: #7C7A6D; }
+
+  tbody tr:last-child td{ border-bottom: none; }
+
+  .name-cell strong{
+    display:block;
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .ministry-cell{ color: var(--ink-soft); }
+
+  .date-normal{ color: var(--ink); }
+  .date-past{ color: var(--brick); font-weight: 600; }
+  .date-soon{ color: var(--moss); font-weight: 600; }
+  tr.prayed .date-normal,
+  tr.prayed .date-past,
+  tr.prayed .date-soon{ color: #7C7A6D; font-weight: 400; }
+
+  .checkbox{
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 1.5px solid var(--hairline-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    cursor: pointer;
+    position: relative;
+    display:inline-block;
+    vertical-align: middle;
+  }
+
+  .checkbox:checked{
+    background: var(--moss);
+    border-color: var(--moss);
+  }
+
+  .checkbox:checked::after{
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .giving-checkbox:checked{
+    background: var(--gold);
+    border-color: var(--gold-deep);
+  }
+
+  .empty-state{
+    margin-top: 60px;
+    text-align: center;
+    color: var(--ink-soft);
+    padding: 40px 20px;
+    border: 1px dashed var(--hairline-strong);
+    border-radius: var(--radius-md);
+  }
+
+  .empty-state h2{
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--ink);
+    margin: 0 0 6px;
+  }
+
+  .empty-state p{ margin:0; font-size: 14px; }
+
+  /* ---- giving tab ---- */
+  .giving-summary{
+    display:flex;
+    gap: 32px;
+    margin: 26px 0 6px;
+    flex-wrap: wrap;
+  }
+
+  .giving-summary .stat .num{
+    font-family: var(--serif);
+    font-size: 30px;
+    color: var(--ink);
+    display:block;
+  }
+  .giving-summary .stat .label{
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .amount-cell{ font-variant-numeric: tabular-nums; }
+  .editable{
+    cursor: pointer;
+    border-bottom: 1px dotted var(--hairline-strong);
+  }
+  .editable:hover{ color: var(--gold-deep); }
+
+  /* ---- add button ---- */
+  .fab{
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-full);
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 10px 24px -6px rgba(34,48,31,0.5);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+  }
+  .fab:hover{ background: var(--gold-deep); transform: translateY(-2px); }
+  .fab:active{ transform: translateY(0); }
+
+  /* ---- modal ---- */
+  .modal-backdrop{
+    position: fixed;
+    inset: 0;
+    background: rgba(34,48,31,0.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-backdrop.active{ display:flex; }
+
+  .modal{
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    padding: 28px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: var(--shadow-modal);
+  }
+
+  .modal h3{
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 21px;
+    margin: 0 0 18px;
+  }
+
+  .field{ margin-bottom: 16px; }
+  .field label{
+    display:block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .field input[type="text"],
+  .field input[type="date"],
+  .field input[type="number"]{
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-sm);
+    font-family: var(--sans);
+    font-size: 14.5px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .field input:focus{
+    outline: none;
+    border-color: var(--gold-deep);
+    background: var(--surface);
+  }
+
+  .field-check{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+  }
+  .field-check label{ margin:0; font-size: 14.5px; color: var(--ink); font-weight: 500; }
+
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .btn{
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+  }
+  .btn-ghost{ background: none; color: var(--ink-soft); }
+  .btn-ghost:hover{ color: var(--ink); }
+  .btn-primary{ background: var(--ink); color: var(--paper); }
+  .btn-primary:hover{ background: var(--gold-deep); }
+
+  .row-remove{
+    background:none;
+    border:none;
+    color: var(--hairline-strong);
+    cursor:pointer;
+    font-size: 16px;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  .row-remove:hover{ color: var(--brick); background: rgba(166,64,44,0.08); }
+
+  @media (max-width: 600px){
+    header.hero{ flex-direction: column; align-items: flex-start; }
+    header.hero h1{ font-size: 32px; }
+    .wrap{ padding: 28px 16px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <h1>Partnership</h1>
+      <p>Everyone you're carrying in prayer and giving toward the spread of the gospel.</p>
+    </div>
+    <nav class="tabs">
+      <button type="button" data-view="partners" class="active">Partners</button>
+      <button type="button" data-view="giving">Giving</button>
+    </nav>
+  </header>
+
+  <section id="view-partners" class="view active">
+    <div class="cycle-bar">
+      <div class="field-inline">
+        <label for="month-range">Prayer cycle length</label>
+        <select id="month-range">
+          <option value="1">1 month</option>
+          <option value="2">2 months</option>
+          <option value="3">3 months</option>
+        </select>
+      </div>
+      <button type="button" id="new-cycle-btn" class="btn btn-primary">New cycle</button>
+    </div>
+    <div id="partners-table-wrap" class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Ministry</th>
+            <th>Date started</th>
+            <th class="center">Giving</th>
+            <th>Scheduled</th>
+            <th class="center">Prayed</th>
+            <th class="center" aria-label="Remove"></th>
+          </tr>
+        </thead>
+        <tbody id="partners-tbody"></tbody>
+      </table>
+    </div>
+    <div id="partners-empty" class="empty-state" style="display:none;">
+      <h2>No partners yet</h2>
+      <p>Tap the + button to add the first person you're supporting.</p>
+    </div>
+  </section>
+
+  <section id="view-giving" class="view">
+    <div class="giving-summary">
+      <div class="stat">
+        <span class="num" id="giving-total">$0</span>
+        <span class="label">given to date</span>
+      </div>
+      <div class="stat">
+        <span class="num" id="giving-count">0</span>
+        <span class="label">partners supported financially</span>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Amount</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="giving-tbody"></tbody>
+      </table>
+    </div>
+    <div id="giving-empty" class="empty-state" style="display:none;">
+      <h2>No giving recorded</h2>
+      <p>Tick the giving box for a partner to record support here.</p>
+    </div>
+  </section>
+</div>
+
+<button class="fab" id="add-btn" aria-label="Add a partner" title="Add a partner">+</button>
+
+<!-- Add partner modal -->
+<div class="modal-backdrop" id="add-modal">
+  <div class="modal">
+    <h3>Add a partner</h3>
+    <form id="add-form">
+      <div class="field">
+        <label for="f-name">Name</label>
+        <input type="text" id="f-name" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-ministry">Ministry</label>
+        <input type="text" id="f-ministry" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-started">Date started</label>
+        <input type="date" id="f-started" required>
+      </div>
+      <div class="field field-check">
+        <input type="checkbox" id="f-giving" class="checkbox giving-checkbox">
+        <label for="f-giving">Supporting financially</label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close="add-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add partner</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Giving amount modal -->
+<div class="modal-backdrop" id="giving-modal">
+  <div class="modal">
+    <h3 id="giving-modal-title">Record giving</h3>
+    <form id="giving-form">
+      <div class="field">
+        <label for="g-amount">Amount</label>
+        <input type="number" id="g-amount" min="0" step="0.01" placeholder="0.00" required>
+      </div>
+      <div class="field">
+        <label for="g-date">Date</label>
+        <input type="date" id="g-date" required>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close="giving-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
