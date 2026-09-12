@@ -666,11 +666,35 @@
       }
     });
 
-    // service worker registration for PWA support
+    // service worker registration for PWA support.
+    // Also actively checks for a newer version and reloads once it takes over,
+    // so code changes show up on next launch instead of staying stuck on a
+    // cached copy.
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function () {
-          // offline support just won't be available; app still functions
+        navigator.serviceWorker
+          .register("sw.js")
+          .then(function (reg) {
+            reg.update();
+            reg.addEventListener("updatefound", function () {
+              var installing = reg.installing;
+              if (!installing) return;
+              installing.addEventListener("statechange", function () {
+                if (installing.state === "installed" && navigator.serviceWorker.controller) {
+                  installing.postMessage("skipWaiting");
+                }
+              });
+            });
+          })
+          .catch(function () {
+            // offline support just won't be available; app still functions
+          });
+
+        var reloadedOnce = false;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (reloadedOnce) return;
+          reloadedOnce = true;
+          window.location.reload();
         });
       });
     }
