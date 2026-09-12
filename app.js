@@ -100,18 +100,23 @@
     return d;
   }
 
-  // Any giving date that has already passed rolls forward, one month at a time,
-  // until it lands on today or a future date - keeping each partner's giving
-  // date as an upcoming "same day of the month" reminder.
+  function monthIndex(d) {
+    return d.getFullYear() * 12 + d.getMonth();
+  }
+
+  // A giving date keeps showing the same day all month long (even after that day
+  // has passed) and only rolls forward once the calendar reaches a new month -
+  // i.e. on/after the 1st of the following month, it jumps to the same day next month.
   function rollGivingDatesForward() {
     var today = todayAtMidnight();
+    var todayIdx = monthIndex(today);
     var changed = false;
     partners.forEach(function (p) {
       if (!p.giving || !p.givingDate) return;
       var d = parseISODate(p.givingDate);
       if (!d) return;
       var guard = 0;
-      while (d.getTime() < today.getTime() && guard < 1200) {
+      while (monthIndex(d) < todayIdx && guard < 1200) {
         d = addMonthsPreserveDay(d, 1);
         changed = true;
         guard++;
@@ -119,6 +124,14 @@
       p.givingDate = toISODate(d);
     });
     return changed;
+  }
+
+  // Whether a giving date falls on or before today - i.e. this month's gift is due/given.
+  function isGivingDatePast(givingDate) {
+    var d = parseISODate(givingDate);
+    if (!d) return false;
+    var today = todayAtMidnight();
+    return d.getTime() <= today.getTime();
   }
 
   function durationMessage(partner) {
@@ -272,10 +285,11 @@
       total += Number(p.givingAmount) || 0;
       var tr = document.createElement("tr");
       tr.dataset.id = p.id;
+      var dateChipClass = "date-chip" + (isGivingDatePast(p.givingDate) ? " date-chip-past" : "");
       tr.innerHTML =
         '<td class="name-cell" data-label="Name"><strong>' + escapeHtml(p.name) + "</strong></td>" +
         '<td class="amount-cell editable" data-label="Amount" data-action="edit-giving">' + formatMoney(p.givingAmount) + "</td>" +
-        '<td class="editable" data-label="Date" data-action="edit-giving">' + formatDisplayDate(p.givingDate) + "</td>";
+        '<td class="editable" data-label="Date" data-action="edit-giving"><span class="' + dateChipClass + '">' + formatDisplayDate(p.givingDate) + "</span></td>";
       tbody.appendChild(tr);
     });
 

@@ -311,6 +311,18 @@
     border-bottom: 1px dotted var(--hairline-strong);
   }
   .editable:hover{ color: var(--gold-deep); }
+  td.editable:has(.date-chip){ border-bottom: none; }
+
+  .date-chip{
+    display:inline-block;
+    padding: 3px 11px;
+    border-radius: var(--radius-full);
+  }
+  .date-chip-past{
+    background: rgba(95,112,82,0.20);
+    color: var(--moss);
+    font-weight: 600;
+  }
 
   .hint-add-date{
     color: var(--gold-deep);
