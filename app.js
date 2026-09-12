@@ -83,6 +83,21 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
+  // Compact form used in the table so every column fits without a horizontal
+  // scrollbar on narrow screens - the exact day is still available by tapping
+  // through to the date-started popup or the giving edit modal.
+  function formatMonthYear(s) {
+    var d = parseISODate(s);
+    if (!d) return "";
+    return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function formatMonthDay(s) {
+    var d = parseISODate(s);
+    if (!d) return "—";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
   function formatMoney(n) {
     var num = Number(n) || 0;
     return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -236,16 +251,18 @@
 
       var dateClass = scheduleColorClass(p);
       var startedDisplay = p.dateStarted
-        ? formatDisplayDate(p.dateStarted)
-        : '<span class="hint-add-date">+ Add date</span>';
+        ? '<span class="date-started-tag" data-action="edit-date-started">Since ' + formatMonthYear(p.dateStarted) + "</span>"
+        : '<span class="date-started-tag hint-add-date" data-action="edit-date-started">+ Add date</span>';
 
       tr.innerHTML =
         '<td class="handle-col"><span class="drag-handle" data-role="drag-handle" aria-label="Drag to reorder ' + escapeHtml(p.name) + '">' + GRIP_ICON + "</span></td>" +
-        '<td class="name-cell" data-label="Name"><strong>' + escapeHtml(p.name) + "</strong></td>" +
-        '<td class="ministry-cell" data-label="Ministry">' + escapeHtml(p.ministry) + "</td>" +
-        '<td class="editable" data-label="Date started" data-action="edit-date-started">' + startedDisplay + "</td>" +
+        '<td class="name-cell" data-label="Name">' +
+          "<strong>" + escapeHtml(p.name) + "</strong>" +
+          '<span class="ministry-line">' + escapeHtml(p.ministry) + "</span>" +
+          startedDisplay +
+        "</td>" +
         '<td class="center" data-label="Giving"><input type="checkbox" class="checkbox giving-checkbox" data-action="toggle-giving" ' + (p.giving ? "checked" : "") + "></td>" +
-        '<td class="' + dateClass + '" data-label="Scheduled">' + formatDisplayDate(p.scheduled) + "</td>" +
+        '<td class="' + dateClass + '" data-label="Sched.">' + formatMonthDay(p.scheduled) + "</td>" +
         '<td class="center" data-label="Prayed"><input type="checkbox" class="checkbox" data-action="toggle-prayed" ' + (p.prayed ? "checked" : "") + "></td>" +
         '<td class="center remove-cell" data-label=""><button type="button" class="row-remove" data-action="remove" title="Remove partner" aria-label="Remove ' + escapeHtml(p.name) + '">&times;</button></td>';
 

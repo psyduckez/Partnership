@@ -83,6 +83,18 @@
     letter-spacing: -0.01em;
   }
 
+  .brand{
+    display:flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .brand-logo{
+    flex-shrink: 0;
+    border-radius: 50%;
+    display:block;
+  }
+
   header.hero p{
     margin: 0;
     color: var(--ink-soft);
@@ -185,7 +197,7 @@
   table{
     width: 100%;
     border-collapse: collapse;
-    min-width: 640px;
+    table-layout: fixed;
   }
 
   thead th{
@@ -196,7 +208,6 @@
     color: var(--ink-soft);
     padding: 0 12px 10px;
     border-bottom: 1px solid var(--hairline-strong);
-    white-space: nowrap;
   }
 
   thead th.center, tbody td.center{ text-align:center; }
@@ -206,6 +217,7 @@
     border-bottom: 1px solid var(--hairline);
     font-size: 14.5px;
     vertical-align: middle;
+    overflow-wrap: break-word;
   }
 
   tbody tr{ transition: background-color 0.25s ease; }
@@ -215,15 +227,46 @@
 
   tbody tr:last-child td{ border-bottom: none; }
 
+  /* partners table column widths - narrow fixed columns for the controls,
+     the name column absorbs whatever space is left so nothing needs to
+     scroll sideways even on a small phone screen */
+  .partners-table th:nth-child(1), .partners-table td:nth-child(1){ width: 30px; padding-left: 4px; padding-right: 2px; }
+  .partners-table th:nth-child(3), .partners-table td:nth-child(3){ width: 15%; }
+  .partners-table th:nth-child(4), .partners-table td:nth-child(4){ width: 19%; }
+  .partners-table th:nth-child(5), .partners-table td:nth-child(5){ width: 15%; }
+  .partners-table th:nth-child(6), .partners-table td:nth-child(6){ width: 24px; padding-left: 2px; padding-right: 4px; }
+
   .name-cell strong{
     display:block;
     font-family: var(--serif);
     font-size: 16px;
     font-weight: 500;
     color: var(--ink);
+    line-height: 1.25;
   }
 
-  .ministry-cell{ color: var(--ink-soft); }
+  .ministry-line{
+    display:block;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    line-height: 1.3;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .date-started-tag{
+    display:inline-block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gold-deep);
+    cursor: pointer;
+    border-bottom: 1px dotted var(--hairline-strong);
+  }
+  tr.prayed .date-started-tag{ color: #948F79; }
 
   .date-normal{ color: var(--ink); }
   .date-past{ color: var(--brick); font-weight: 600; }
@@ -498,77 +541,29 @@
     .wrap{ padding: 28px 16px 16px; }
   }
 
-  /* ---- mobile: stacked cards instead of a scrolling table ---- */
-  @media (max-width: 720px){
+  /* ---- mobile: keep a real table, just tightened up so every column
+     fits the screen width without a horizontal scrollbar ---- */
+  @media (max-width: 520px){
+    .wrap{ padding: 24px 10px 16px; }
     .table-scroll{ overflow-x: visible; }
-    table{ min-width: 0; }
 
-    thead{ display:none; }
+    thead th{ padding: 0 3px 8px; font-size: 10.5px; }
+    tbody td{ padding: 10px 3px; font-size: 13px; }
 
-    tbody, tr, td{ display:block; width:100%; }
+    .name-cell strong{ font-size: 14px; }
+    .ministry-line{ font-size: 11px; }
+    .date-started-tag{ font-size: 10.5px; margin-top: 2px; }
 
-    #partners-tbody tr, #giving-tbody tr{
-      background: var(--surface);
-      border: 1px solid var(--hairline);
-      border-radius: var(--radius-md);
-      margin-bottom: 12px;
-      padding: 14px 14px 6px;
-      position: relative;
-    }
-    #partners-tbody tr.prayed{ background: var(--grey-row); }
+    .drag-handle{ width: 22px; height: 22px; }
+    .drag-handle svg{ width: 12px; height: 12px; }
 
-    #partners-tbody td, #giving-tbody td{
-      border-bottom: none;
-      padding: 7px 0;
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-    }
+    .checkbox{ width: 18px; height: 18px; }
+    .checkbox:checked::after{ left: 5px; top: 1px; width: 4px; height: 9px; }
 
-    #partners-tbody td[data-label]::before,
-    #giving-tbody td[data-label]::before{
-      content: attr(data-label);
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--ink-soft);
-    }
+    .row-remove{ font-size: 14px; padding: 2px 3px; }
 
-    #partners-tbody td.name-cell,
-    #giving-tbody td.name-cell{
-      order: -3;
-      padding-top: 0;
-      padding-bottom: 10px;
-      padding-right: 70px;
-      border-bottom: 1px solid var(--hairline);
-      margin-bottom: 4px;
-    }
-    #partners-tbody td.name-cell::before,
-    #giving-tbody td.name-cell::before{ display:none; }
-    #partners-tbody td.name-cell strong,
-    #giving-tbody td.name-cell strong{ font-size: 17px; }
-
-    #partners-tbody td.handle-col{
-      order: -4;
-      position: absolute;
-      top: 10px;
-      right: 40px;
-      width: auto;
-      padding: 0;
-      z-index: 1;
-    }
-    #partners-tbody td.handle-col::before{ display:none; }
-
-    #partners-tbody td.remove-cell{
-      position: absolute;
-      top: 6px;
-      right: 4px;
-      width: auto;
-      padding: 0;
-      z-index: 1;
-    }
-    #partners-tbody td.remove-cell::before{ display:none; }
-    #partners-tbody .row-remove{ font-size: 20px; padding: 8px; }
+    .partners-table th:nth-child(1), .partners-table td:nth-child(1){ width: 22px; }
+    .partners-table th:nth-child(6), .partners-table td:nth-child(6){ width: 18px; }
   }
 
 </style>
@@ -577,9 +572,12 @@
 
 <div class="wrap">
   <header class="hero">
-    <div>
-      <h1>Partnership</h1>
-      <p>Everyone you're carrying in prayer and giving toward the spread of the gospel.</p>
+    <div class="brand">
+      <img src="logo-header.png" alt="Partnership logo" class="brand-logo" width="52" height="52">
+      <div>
+        <h1>Partnership</h1>
+        <p>Everyone you're carrying in prayer and giving toward the spread of the gospel.</p>
+      </div>
     </div>
     <nav class="tabs">
       <button type="button" data-view="partners" class="active">Partners</button>
@@ -600,13 +598,11 @@
       <button type="button" id="new-cycle-btn" class="btn btn-primary">New cycle</button>
     </div>
     <div id="partners-table-wrap" class="table-scroll">
-      <table>
+      <table class="partners-table">
         <thead>
           <tr>
             <th class="handle-col" aria-label="Reorder"></th>
             <th>Name</th>
-            <th>Ministry</th>
-            <th>Date started</th>
             <th class="center">Giving</th>
             <th>Scheduled</th>
             <th class="center">Prayed</th>
@@ -718,6 +714,6 @@
   </div>
 </div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

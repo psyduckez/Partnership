@@ -1,13 +1,14 @@
 // Bump this version string every time index.html / app.js change so old
 // caches get discarded and the new files are fetched fresh.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v4";
 const CACHE_NAME = "gospel-partners-" + CACHE_VERSION;
 const APP_SHELL = [
   "./index.html",
   "./app.js",
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./logo-header.png"
 ];
 
 self.addEventListener("install", (event) => {
