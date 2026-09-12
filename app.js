@@ -5,12 +5,20 @@
   var SETTINGS_KEY = "gospelPartners.settings.v1";
   var DAY_MS = 24 * 60 * 60 * 1000;
   var DEFAULT_MONTH_RANGE = 3;
+  var GRIP_ICON =
+    '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<circle cx="5" cy="3" r="1.3" fill="currentColor"/><circle cx="11" cy="3" r="1.3" fill="currentColor"/>' +
+    '<circle cx="5" cy="8" r="1.3" fill="currentColor"/><circle cx="11" cy="8" r="1.3" fill="currentColor"/>' +
+    '<circle cx="5" cy="13" r="1.3" fill="currentColor"/><circle cx="11" cy="13" r="1.3" fill="currentColor"/>' +
+    "</svg>";
 
   /** @type {Array<Object>} */
   var partners = [];
   var settings = { monthRange: DEFAULT_MONTH_RANGE };
   var pendingGivingTargetId = null; // id awaiting an amount from the giving modal
   var pendingGivingIsNewPartner = false;
+  var pendingDateStartedId = null;
+  var givingSort = { column: null, dir: "asc" };
 
   // ---------- persistence ----------
   function load() {
@@ -78,6 +86,57 @@
   function formatMoney(n) {
     var num = Number(n) || 0;
     return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Adds n months to a date while preserving the day-of-month where possible
+  // (e.g. Jan 31 + 1 month lands on Feb 28, not rolling over into March).
+  function addMonthsPreserveDay(date, n) {
+    var day = date.getDate();
+    var d = new Date(date.getTime());
+    d.setDate(1);
+    d.setMonth(d.getMonth() + n);
+    var daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, daysInMonth));
+    return d;
+  }
+
+  // Any giving date that has already passed rolls forward, one month at a time,
+  // until it lands on today or a future date - keeping each partner's giving
+  // date as an upcoming "same day of the month" reminder.
+  function rollGivingDatesForward() {
+    var today = todayAtMidnight();
+    var changed = false;
+    partners.forEach(function (p) {
+      if (!p.giving || !p.givingDate) return;
+      var d = parseISODate(p.givingDate);
+      if (!d) return;
+      var guard = 0;
+      while (d.getTime() < today.getTime() && guard < 1200) {
+        d = addMonthsPreserveDay(d, 1);
+        changed = true;
+        guard++;
+      }
+      p.givingDate = toISODate(d);
+    });
+    return changed;
+  }
+
+  function durationMessage(partner) {
+    var start = parseISODate(partner.dateStarted);
+    if (!start) return "";
+    var today = todayAtMidnight();
+    var years = today.getFullYear() - start.getFullYear();
+    var months = today.getMonth() - start.getMonth();
+    if (today.getDate() < start.getDate()) months--;
+    if (months < 0) { years--; months += 12; }
+    if (years < 0) { years = 0; months = 0; }
+
+    var parts = [];
+    if (years > 0) parts.push(years + (years === 1 ? " year" : " years"));
+    if (months > 0) parts.push(months + (months === 1 ? " month" : " months"));
+    var durationStr = parts.length ? parts.join(" and ") : "less than a month";
+
+    return "You've been partnering with " + partner.name + " for " + durationStr + "!";
   }
 
   // ---------- scheduling ----------
@@ -163,15 +222,19 @@
       if (p.prayed) tr.classList.add("prayed");
 
       var dateClass = scheduleColorClass(p);
+      var startedDisplay = p.dateStarted
+        ? formatDisplayDate(p.dateStarted)
+        : '<span class="hint-add-date">+ Add date</span>';
 
       tr.innerHTML =
-        '<td class="name-cell"><strong>' + escapeHtml(p.name) + "</strong></td>" +
-        '<td class="ministry-cell">' + escapeHtml(p.ministry) + "</td>" +
-        "<td>" + formatDisplayDate(p.dateStarted) + "</td>" +
-        '<td class="center"><input type="checkbox" class="checkbox giving-checkbox" data-action="toggle-giving" ' + (p.giving ? "checked" : "") + "></td>" +
-        '<td class="' + dateClass + '">' + formatDisplayDate(p.scheduled) + "</td>" +
-        '<td class="center"><input type="checkbox" class="checkbox" data-action="toggle-prayed" ' + (p.prayed ? "checked" : "") + "></td>" +
-        '<td class="center"><button type="button" class="row-remove" data-action="remove" title="Remove partner" aria-label="Remove ' + escapeHtml(p.name) + '">&times;</button></td>';
+        '<td class="handle-col"><span class="drag-handle" data-role="drag-handle" aria-label="Drag to reorder ' + escapeHtml(p.name) + '">' + GRIP_ICON + "</span></td>" +
+        '<td class="name-cell" data-label="Name"><strong>' + escapeHtml(p.name) + "</strong></td>" +
+        '<td class="ministry-cell" data-label="Ministry">' + escapeHtml(p.ministry) + "</td>" +
+        '<td class="editable" data-label="Date started" data-action="edit-date-started">' + startedDisplay + "</td>" +
+        '<td class="center" data-label="Giving"><input type="checkbox" class="checkbox giving-checkbox" data-action="toggle-giving" ' + (p.giving ? "checked" : "") + "></td>" +
+        '<td class="' + dateClass + '" data-label="Scheduled">' + formatDisplayDate(p.scheduled) + "</td>" +
+        '<td class="center" data-label="Prayed"><input type="checkbox" class="checkbox" data-action="toggle-prayed" ' + (p.prayed ? "checked" : "") + "></td>" +
+        '<td class="center remove-cell" data-label=""><button type="button" class="row-remove" data-action="remove" title="Remove partner" aria-label="Remove ' + escapeHtml(p.name) + '">&times;</button></td>';
 
       tbody.appendChild(tr);
     });
@@ -181,6 +244,20 @@
     var tbody = document.getElementById("giving-tbody");
     var emptyEl = document.getElementById("giving-empty");
     var givers = partners.filter(function (p) { return p.giving; });
+
+    if (givingSort.column === "amount") {
+      givers.sort(function (a, b) {
+        var diff = (Number(a.givingAmount) || 0) - (Number(b.givingAmount) || 0);
+        return givingSort.dir === "asc" ? diff : -diff;
+      });
+    } else if (givingSort.column === "date") {
+      givers.sort(function (a, b) {
+        var da = parseISODate(a.givingDate);
+        var db = parseISODate(b.givingDate);
+        var diff = (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+        return givingSort.dir === "asc" ? diff : -diff;
+      });
+    }
 
     tbody.innerHTML = "";
 
@@ -196,14 +273,23 @@
       var tr = document.createElement("tr");
       tr.dataset.id = p.id;
       tr.innerHTML =
-        '<td class="name-cell"><strong>' + escapeHtml(p.name) + "</strong></td>" +
-        '<td class="amount-cell editable" data-action="edit-giving">' + formatMoney(p.givingAmount) + "</td>" +
-        '<td class="editable" data-action="edit-giving">' + formatDisplayDate(p.givingDate) + "</td>";
+        '<td class="name-cell" data-label="Name"><strong>' + escapeHtml(p.name) + "</strong></td>" +
+        '<td class="amount-cell editable" data-label="Amount" data-action="edit-giving">' + formatMoney(p.givingAmount) + "</td>" +
+        '<td class="editable" data-label="Date" data-action="edit-giving">' + formatDisplayDate(p.givingDate) + "</td>";
       tbody.appendChild(tr);
     });
 
     document.getElementById("giving-total").textContent = formatMoney(total);
     document.getElementById("giving-count").textContent = String(givers.length);
+
+    document.querySelectorAll(".sort-arrow").forEach(function (el) {
+      var col = el.dataset.arrow;
+      if (givingSort.column === col) {
+        el.textContent = givingSort.dir === "asc" ? "▲" : "▼";
+      } else {
+        el.textContent = "";
+      }
+    });
   }
 
   function escapeHtml(str) {
@@ -230,13 +316,28 @@
     setTimeout(function () { document.getElementById("g-amount").focus(); }, 50);
   }
 
+  function openDateStartedModal(partner) {
+    pendingDateStartedId = partner.id;
+    document.getElementById("ds-modal-title").textContent = partner.name;
+    var durationEl = document.getElementById("ds-duration-text");
+    if (partner.dateStarted) {
+      durationEl.textContent = durationMessage(partner);
+      durationEl.style.display = "block";
+    } else {
+      durationEl.textContent = "";
+      durationEl.style.display = "none";
+    }
+    document.getElementById("ds-date").value = partner.dateStarted || "";
+    openModal("datestarted-modal");
+  }
+
   // ---------- actions ----------
   function addPartner(data) {
     var p = {
       id: "p" + Date.now() + Math.floor(Math.random() * 1000),
       name: data.name,
       ministry: data.ministry,
-      dateStarted: data.dateStarted,
+      dateStarted: null,
       giving: false,
       givingAmount: 0,
       givingDate: null,
@@ -251,6 +352,20 @@
     if (data.giving) {
       openGivingModal(p, true);
     }
+  }
+
+  function reorderPartners(idsInOrder) {
+    var map = {};
+    partners.forEach(function (p) { map[p.id] = p; });
+    var reordered = idsInOrder.map(function (id) { return map[id]; }).filter(Boolean);
+    // Safety net: keep any partner not present in idsInOrder (shouldn't normally happen).
+    partners.forEach(function (p) {
+      if (reordered.indexOf(p) === -1) reordered.push(p);
+    });
+    partners = reordered;
+    recomputeSchedule();
+    save();
+    render();
   }
 
   function removePartner(id) {
@@ -294,17 +409,85 @@
     return null;
   }
 
+  // ---------- drag reorder ----------
+  function initDragReorder() {
+    var tbody = document.getElementById("partners-tbody");
+    var draggingEl = null;
+    var startY = 0;
+
+    function onPointerMove(e) {
+      if (!draggingEl) return;
+      var dy = e.clientY - startY;
+      draggingEl.style.transform = "translateY(" + dy + "px)";
+
+      var rows = Array.from(tbody.children);
+      var idx = rows.indexOf(draggingEl);
+      var pointerY = e.clientY;
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        if (row === draggingEl) continue;
+        var rect = row.getBoundingClientRect();
+        var mid = rect.top + rect.height / 2;
+        if (i < idx && pointerY < mid) {
+          tbody.insertBefore(draggingEl, row);
+          startY = e.clientY;
+          draggingEl.style.transform = "translateY(0px)";
+          break;
+        } else if (i > idx && pointerY > mid) {
+          tbody.insertBefore(draggingEl, row.nextSibling);
+          startY = e.clientY;
+          draggingEl.style.transform = "translateY(0px)";
+          break;
+        }
+      }
+    }
+
+    function onPointerUp() {
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      if (!draggingEl) return;
+      draggingEl.style.transform = "";
+      draggingEl.style.position = "";
+      draggingEl.classList.remove("dragging");
+      document.body.style.userSelect = "";
+
+      var newOrderIds = Array.from(tbody.children).map(function (tr) { return tr.dataset.id; });
+      draggingEl = null;
+      reorderPartners(newOrderIds);
+    }
+
+    tbody.addEventListener("pointerdown", function (e) {
+      var handle = e.target.closest('[data-role="drag-handle"]');
+      if (!handle) return;
+      var tr = handle.closest("tr");
+      if (!tr) return;
+      e.preventDefault();
+      draggingEl = tr;
+      startY = e.clientY;
+      tr.style.position = "relative";
+      tr.classList.add("dragging");
+      document.body.style.userSelect = "none";
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+  }
+
   // ---------- events ----------
   function init() {
     load();
+    // Any giving date already in the past rolls forward to its next monthly
+    // occurrence so the giving tab always shows the upcoming date.
+    var rolled = rollGivingDatesForward();
     // Only assign schedule dates on first run / for partners that don't have one yet.
     // Once a date is assigned it stays fixed until the roster changes (add, remove,
     // or a prayed toggle), so dates don't drift just from reopening the app.
     var needsSchedule = partners.some(function (p) { return !p.prayed && !p.scheduled; });
     if (needsSchedule) recomputeSchedule();
-    save();
+    if (rolled || needsSchedule) save();
     document.getElementById("month-range").value = String(settings.monthRange);
     render();
+    initDragReorder();
 
     // tabs
     document.querySelectorAll("nav.tabs button").forEach(function (btn) {
@@ -330,17 +513,28 @@
       var val = parseInt(document.getElementById("month-range").value, 10);
       if ([1, 2, 3].indexOf(val) === -1) val = settings.monthRange;
       var label = val === 1 ? "1 month" : val + " months";
-      var proceed = confirm(
-        "Start a new " + label + " prayer cycle?\n\nThis will unmark every partner as prayed for and spread everyone's scheduled dates from today to the end of the range."
-      );
+      var proceed = confirm("Start a new " + label + " prayer cycle?");
       if (!proceed) return;
       startNewCycle(val);
+    });
+
+    // giving table sortable headers
+    document.querySelectorAll("#view-giving th.sortable").forEach(function (th) {
+      th.addEventListener("click", function () {
+        var col = th.dataset.sort;
+        if (givingSort.column === col) {
+          givingSort.dir = givingSort.dir === "asc" ? "desc" : "asc";
+        } else {
+          givingSort.column = col;
+          givingSort.dir = "asc";
+        }
+        renderGivingTable();
+      });
     });
 
     // fab
     document.getElementById("add-btn").addEventListener("click", function () {
       document.getElementById("add-form").reset();
-      document.getElementById("f-started").value = toISODate(todayAtMidnight());
       openModal("add-modal");
       setTimeout(function () { document.getElementById("f-name").focus(); }, 50);
     });
@@ -357,6 +551,8 @@
             render(); // restores checkbox to unchecked
           }
           pendingGivingTargetId = null;
+        } else if (modalId === "datestarted-modal") {
+          pendingDateStartedId = null;
         }
       });
     });
@@ -368,6 +564,8 @@
             var p = findPartner(pendingGivingTargetId);
             if (p && !p.giving) render();
             pendingGivingTargetId = null;
+          } else if (backdrop.id === "datestarted-modal") {
+            pendingDateStartedId = null;
           }
         }
       });
@@ -378,11 +576,10 @@
       e.preventDefault();
       var name = document.getElementById("f-name").value.trim();
       var ministry = document.getElementById("f-ministry").value.trim();
-      var dateStarted = document.getElementById("f-started").value;
       var giving = document.getElementById("f-giving").checked;
-      if (!name || !ministry || !dateStarted) return;
+      if (!name || !ministry) return;
       closeModal("add-modal");
-      addPartner({ name: name, ministry: ministry, dateStarted: dateStarted, giving: giving });
+      addPartner({ name: name, ministry: ministry, giving: giving });
     });
 
     // giving amount form
@@ -401,6 +598,19 @@
       render();
     });
 
+    // date started form
+    document.getElementById("ds-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var p = findPartner(pendingDateStartedId);
+      if (!p) { closeModal("datestarted-modal"); return; }
+      var val = document.getElementById("ds-date").value;
+      p.dateStarted = val || null;
+      pendingDateStartedId = null;
+      closeModal("datestarted-modal");
+      save();
+      render();
+    });
+
     // delegated table events
     document.getElementById("partners-tbody").addEventListener("change", function (e) {
       var target = e.target;
@@ -415,14 +625,20 @@
     });
 
     document.getElementById("partners-tbody").addEventListener("click", function (e) {
-      var target = e.target;
-      if (target.dataset.action === "remove") {
-        var tr = target.closest("tr");
-        var id = tr.dataset.id;
+      var actionEl = e.target.closest("[data-action]");
+      if (!actionEl) return;
+      var tr = actionEl.closest("tr");
+      if (!tr) return;
+      var id = tr.dataset.id;
+      var action = actionEl.dataset.action;
+      if (action === "remove") {
         var p = findPartner(id);
         if (p && confirm("Remove " + p.name + " from your partners?")) {
           removePartner(id);
         }
+      } else if (action === "edit-date-started") {
+        var partner = findPartner(id);
+        if (partner) openDateStartedModal(partner);
       }
     });
 

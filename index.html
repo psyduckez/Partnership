@@ -312,6 +312,57 @@
   }
   .editable:hover{ color: var(--gold-deep); }
 
+  .hint-add-date{
+    color: var(--gold-deep);
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .duration-text{
+    margin: -8px 0 18px;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    line-height: 1.4;
+  }
+
+  th.sortable{
+    cursor: pointer;
+    user-select: none;
+  }
+  th.sortable:hover{ color: var(--ink); }
+  .sort-arrow{
+    display:inline-block;
+    font-size: 9px;
+    margin-left: 3px;
+    opacity: 0.7;
+  }
+
+  /* ---- drag handle ---- */
+  th.handle-col{ width: 34px; }
+  td.handle-col{
+    padding-left: 6px;
+    padding-right: 0;
+    width: 34px;
+  }
+  .drag-handle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    color: var(--hairline-strong);
+    cursor: grab;
+    touch-action: none;
+    border-radius: 6px;
+  }
+  .drag-handle:hover{ color: var(--ink-soft); background: var(--paper); }
+  tr.dragging{
+    opacity: 0.85;
+    box-shadow: 0 12px 24px -8px rgba(34,48,31,0.35);
+    background: var(--surface);
+  }
+
   /* ---- add button ---- */
   .fab{
     position: fixed;
@@ -434,6 +485,80 @@
     header.hero h1{ font-size: 32px; }
     .wrap{ padding: 28px 16px 16px; }
   }
+
+  /* ---- mobile: stacked cards instead of a scrolling table ---- */
+  @media (max-width: 720px){
+    .table-scroll{ overflow-x: visible; }
+    table{ min-width: 0; }
+
+    thead{ display:none; }
+
+    tbody, tr, td{ display:block; width:100%; }
+
+    #partners-tbody tr, #giving-tbody tr{
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
+      margin-bottom: 12px;
+      padding: 14px 14px 6px;
+      position: relative;
+    }
+    #partners-tbody tr.prayed{ background: var(--grey-row); }
+
+    #partners-tbody td, #giving-tbody td{
+      border-bottom: none;
+      padding: 7px 0;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    #partners-tbody td[data-label]::before,
+    #giving-tbody td[data-label]::before{
+      content: attr(data-label);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
+    #partners-tbody td.name-cell,
+    #giving-tbody td.name-cell{
+      order: -3;
+      padding-top: 0;
+      padding-bottom: 10px;
+      padding-right: 70px;
+      border-bottom: 1px solid var(--hairline);
+      margin-bottom: 4px;
+    }
+    #partners-tbody td.name-cell::before,
+    #giving-tbody td.name-cell::before{ display:none; }
+    #partners-tbody td.name-cell strong,
+    #giving-tbody td.name-cell strong{ font-size: 17px; }
+
+    #partners-tbody td.handle-col{
+      order: -4;
+      position: absolute;
+      top: 10px;
+      right: 40px;
+      width: auto;
+      padding: 0;
+      z-index: 1;
+    }
+    #partners-tbody td.handle-col::before{ display:none; }
+
+    #partners-tbody td.remove-cell{
+      position: absolute;
+      top: 6px;
+      right: 4px;
+      width: auto;
+      padding: 0;
+      z-index: 1;
+    }
+    #partners-tbody td.remove-cell::before{ display:none; }
+    #partners-tbody .row-remove{ font-size: 20px; padding: 8px; }
+  }
+
 </style>
 </head>
 <body>
@@ -466,6 +591,7 @@
       <table>
         <thead>
           <tr>
+            <th class="handle-col" aria-label="Reorder"></th>
             <th>Name</th>
             <th>Ministry</th>
             <th>Date started</th>
@@ -500,8 +626,8 @@
         <thead>
           <tr>
             <th>Name</th>
-            <th>Amount</th>
-            <th>Date</th>
+            <th class="sortable" data-sort="amount">Amount <span class="sort-arrow" data-arrow="amount"></span></th>
+            <th class="sortable" data-sort="date">Date <span class="sort-arrow" data-arrow="date"></span></th>
           </tr>
         </thead>
         <tbody id="giving-tbody"></tbody>
@@ -529,10 +655,6 @@
         <label for="f-ministry">Ministry</label>
         <input type="text" id="f-ministry" required autocomplete="off">
       </div>
-      <div class="field">
-        <label for="f-started">Date started</label>
-        <input type="date" id="f-started" required>
-      </div>
       <div class="field field-check">
         <input type="checkbox" id="f-giving" class="checkbox giving-checkbox">
         <label for="f-giving">Supporting financially</label>
@@ -540,6 +662,24 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" data-close="add-modal">Cancel</button>
         <button type="submit" class="btn btn-primary">Add partner</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Date started modal -->
+<div class="modal-backdrop" id="datestarted-modal">
+  <div class="modal">
+    <h3 id="ds-modal-title">Date started</h3>
+    <p id="ds-duration-text" class="duration-text" style="display:none;"></p>
+    <form id="ds-form">
+      <div class="field">
+        <label for="ds-date">Date started</label>
+        <input type="date" id="ds-date">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close="datestarted-modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
   </div>
