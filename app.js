@@ -14,7 +14,7 @@
 
   /** @type {Array<Object>} */
   var partners = [];
-  var settings = { monthRange: DEFAULT_MONTH_RANGE };
+  var settings = { monthRange: DEFAULT_MONTH_RANGE, lastShuffleMonthIndex: null };
   var pendingGivingTargetId = null; // id awaiting an amount from the giving modal
   var pendingGivingIsNewPartner = false;
   var pendingDateStartedId = null;
@@ -34,6 +34,9 @@
         var parsed = JSON.parse(rawSettings);
         if (parsed && [1, 2, 3].indexOf(parsed.monthRange) !== -1) {
           settings.monthRange = parsed.monthRange;
+        }
+        if (parsed && typeof parsed.lastShuffleMonthIndex === "number") {
+          settings.lastShuffleMonthIndex = parsed.lastShuffleMonthIndex;
         }
       }
     } catch (e) {
@@ -213,6 +216,29 @@
     render();
   }
 
+  // Fisher-Yates shuffle, in place.
+  function shuffleArray(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+  }
+
+  // Once per calendar month, shuffle the partner order and redistribute
+  // scheduled dates accordingly - keeps the prayer rotation from always
+  // landing on people in the same order every cycle.
+  function shuffleForNewMonthIfNeeded() {
+    var todayIdx = monthIndex(todayAtMidnight());
+    if (settings.lastShuffleMonthIndex === todayIdx) return false;
+    if (partners.length > 1) shuffleArray(partners);
+    settings.lastShuffleMonthIndex = todayIdx;
+    saveSettings();
+    recomputeSchedule();
+    return true;
+  }
+
   function scheduleColorClass(partner) {
     if (partner.prayed) return "date-normal";
     var sched = parseISODate(partner.scheduled);
@@ -228,6 +254,46 @@
   function render() {
     renderPartnersTable();
     renderGivingTable();
+    renderNextUp();
+    renderProgress();
+  }
+
+  function renderNextUp() {
+    var card = document.getElementById("next-up-card");
+    var unprayed = partners.filter(function (p) { return !p.prayed && p.scheduled; });
+    if (unprayed.length === 0) {
+      card.style.display = "none";
+      return;
+    }
+    var next = unprayed.reduce(function (soonest, p) {
+      return parseISODate(p.scheduled).getTime() < parseISODate(soonest.scheduled).getTime() ? p : soonest;
+    });
+    document.getElementById("next-up-name").textContent = next.name;
+    document.getElementById("next-up-ministry").textContent = next.ministry;
+    document.getElementById("next-up-date").textContent = formatMonthDay(next.scheduled);
+    card.style.display = "flex";
+  }
+
+  function renderProgress() {
+    var card = document.getElementById("progress-card");
+    var todayIdx = monthIndex(todayAtMidnight());
+    var total = 0;
+    var prayedCount = 0;
+    partners.forEach(function (p) {
+      var d = parseISODate(p.scheduled);
+      if (d && monthIndex(d) === todayIdx) {
+        total++;
+        if (p.prayed) prayedCount++;
+      }
+    });
+    if (total === 0) {
+      card.style.display = "none";
+      return;
+    }
+    card.style.display = "block";
+    document.getElementById("progress-count").textContent = prayedCount + " of " + total;
+    var pct = Math.round((prayedCount / total) * 100);
+    document.getElementById("progress-fill").style.width = pct + "%";
   }
 
   function renderPartnersTable() {
@@ -342,9 +408,19 @@
     pendingGivingIsNewPartner = !!isNew;
     document.getElementById("giving-modal-title").textContent = "Record giving for " + partner.name;
     document.getElementById("g-amount").value = partner.givingAmount || "";
-    document.getElementById("g-date").value = partner.givingDate || toISODate(todayAtMidnight());
+    var existingDay = partner.givingDate ? parseISODate(partner.givingDate).getDate() : todayAtMidnight().getDate();
+    document.getElementById("g-date-day").value = existingDay;
     openModal("giving-modal");
     setTimeout(function () { document.getElementById("g-amount").focus(); }, 50);
+  }
+
+  // Builds an ISO date string for the given day-of-month, in the current
+  // month/year - clamped to the number of days the current month actually has.
+  function dateForDayInCurrentMonth(day) {
+    var today = todayAtMidnight();
+    var daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    var clamped = Math.min(Math.max(1, day), daysInMonth);
+    return toISODate(new Date(today.getFullYear(), today.getMonth(), clamped));
   }
 
   function openDateStartedModal(partner) {
@@ -510,12 +586,15 @@
     // Any giving date already in the past rolls forward to its next monthly
     // occurrence so the giving tab always shows the upcoming date.
     var rolled = rollGivingDatesForward();
+    // Once a month, reshuffle the partner order (and redistribute schedules
+    // accordingly) so the rotation doesn't always land the same way.
+    var shuffled = shuffleForNewMonthIfNeeded();
     // Only assign schedule dates on first run / for partners that don't have one yet.
     // Once a date is assigned it stays fixed until the roster changes (add, remove,
     // or a prayed toggle), so dates don't drift just from reopening the app.
     var needsSchedule = partners.some(function (p) { return !p.prayed && !p.scheduled; });
-    if (needsSchedule) recomputeSchedule();
-    if (rolled || needsSchedule) save();
+    if (needsSchedule && !shuffled) recomputeSchedule();
+    if (rolled || needsSchedule || shuffled) save();
     document.getElementById("month-range").value = String(settings.monthRange);
     render();
     initDragReorder();
@@ -619,10 +698,10 @@
       var p = findPartner(pendingGivingTargetId);
       if (!p) { closeModal("giving-modal"); return; }
       var amount = parseFloat(document.getElementById("g-amount").value);
-      var date = document.getElementById("g-date").value;
+      var day = parseInt(document.getElementById("g-date-day").value, 10);
       p.giving = true;
       p.givingAmount = isNaN(amount) ? 0 : amount;
-      p.givingDate = date || toISODate(todayAtMidnight());
+      p.givingDate = dateForDayInCurrentMonth(isNaN(day) ? todayAtMidnight().getDate() : day);
       pendingGivingTargetId = null;
       closeModal("giving-modal");
       save();
