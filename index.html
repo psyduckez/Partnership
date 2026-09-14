@@ -144,6 +144,10 @@
     margin-top: 26px;
   }
 
+  .next-up-stage{
+    position: relative;
+  }
+
   .next-up-card{
     position: relative;
     display:flex;
@@ -157,7 +161,6 @@
     cursor: grab;
     user-select: none;
     will-change: transform;
-    overflow: hidden;
   }
 
   .next-up-card.dragging{ cursor: grabbing; }
@@ -166,33 +169,29 @@
     transition: transform 0.28s ease, opacity 0.28s ease;
   }
 
-  .swipe-badge{
+  /* Overlays sit OUTSIDE the card (a sibling, not a child) so they stay put
+     and stay visible while the card itself slides away underneath them. */
+  .swipe-overlay{
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 6px 16px;
-    border-radius: var(--radius-full);
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    inset: 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    border-radius: var(--radius-md);
     opacity: 0;
     pointer-events: none;
-    border: 2px solid currentColor;
-    z-index: 2;
+    z-index: 5;
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
   }
 
-  .swipe-badge-prayed{
-    right: 16px;
-    color: #8FCB9B;
-    background: rgba(95,112,82,0.35);
-  }
-
-  .swipe-badge-skip{
-    left: 16px;
-    color: var(--gold);
-    background: rgba(201,154,61,0.25);
-  }
+  .swipe-overlay-prayed{ background: rgba(42,116,64,0.94); }
+  .swipe-overlay-skip{ background: rgba(173,52,38,0.94); }
 
   .next-up-hint{
     margin: 8px 4px 0;
@@ -714,7 +713,7 @@
       <img src="logo-header.png" alt="Partnership logo" class="brand-logo" width="52" height="52">
       <div>
         <h1>Partnership</h1>
-        <p id="page-caption" class="caption">Joyful giving in gospel partnership.</p>
+        <p id="page-caption" class="caption">Joyfully praying in gospel partnership.</p>
       </div>
     </div>
     <nav class="tabs">
@@ -725,15 +724,17 @@
 
   <section id="view-partners" class="view active">
     <div id="next-up-wrap" class="next-up-wrap" style="display:none;">
-      <div id="next-up-card" class="next-up-card">
-        <div id="badge-skip" class="swipe-badge swipe-badge-skip">Skip</div>
-        <div id="badge-prayed" class="swipe-badge swipe-badge-prayed">Prayed</div>
-        <span class="next-up-label">Next up</span>
-        <div class="next-up-body">
-          <strong id="next-up-name"></strong>
-          <span id="next-up-ministry" class="next-up-ministry"></span>
+      <div class="next-up-stage">
+        <div id="next-up-card" class="next-up-card">
+          <span class="next-up-label">Next up</span>
+          <div class="next-up-body">
+            <strong id="next-up-name"></strong>
+            <span id="next-up-ministry" class="next-up-ministry"></span>
+          </div>
+          <span id="next-up-date" class="next-up-date"></span>
         </div>
-        <span id="next-up-date" class="next-up-date"></span>
+        <div id="overlay-skip" class="swipe-overlay swipe-overlay-skip"><span>&larr; Skip</span></div>
+        <div id="overlay-prayed" class="swipe-overlay swipe-overlay-prayed"><span>Prayed &rarr;</span></div>
       </div>
       <p class="next-up-hint">Swipe right to mark prayed &middot; swipe left to skip for now</p>
     </div>
@@ -878,6 +879,6 @@
   </div>
 </div>
 
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

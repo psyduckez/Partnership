@@ -292,8 +292,8 @@
       card.style.transition = "none";
       card.style.transform = "translateX(0) rotate(0deg)";
       card.style.opacity = "1";
-      document.getElementById("badge-prayed").style.opacity = 0;
-      document.getElementById("badge-skip").style.opacity = 0;
+      document.getElementById("overlay-prayed").style.opacity = 0;
+      document.getElementById("overlay-skip").style.opacity = 0;
       void card.offsetWidth;
       card.style.transition = "";
     }
@@ -477,7 +477,9 @@
       scheduled: null
     };
     partners.push(p);
-    assignFallbackDate(p);
+    // Redistribute everyone's scheduled date evenly across the cycle window
+    // now that the total number of partners has changed.
+    recomputeSchedule();
     save();
     render();
 
@@ -495,6 +497,8 @@
       if (reordered.indexOf(p) === -1) reordered.push(p);
     });
     partners = reordered;
+    // Re-spread scheduled dates to match the new order.
+    recomputeSchedule();
     save();
     render();
   }
@@ -641,8 +645,8 @@
   // ---------- next-up swipe gesture ----------
   function initNextUpSwipe() {
     var card = document.getElementById("next-up-card");
-    var badgePrayed = document.getElementById("badge-prayed");
-    var badgeSkip = document.getElementById("badge-skip");
+    var overlayPrayed = document.getElementById("overlay-prayed");
+    var overlaySkip = document.getElementById("overlay-skip");
     var THRESHOLD = 90;
     var dragging = false;
     var startX = 0;
@@ -650,8 +654,8 @@
 
     function setBadgeOpacity(amount) {
       var t = Math.min(Math.abs(amount) / THRESHOLD, 1);
-      badgePrayed.style.opacity = amount > 0 ? t : 0;
-      badgeSkip.style.opacity = amount < 0 ? t : 0;
+      overlayPrayed.style.opacity = amount > 0 ? t : 0;
+      overlaySkip.style.opacity = amount < 0 ? t : 0;
     }
 
     function onPointerDown(e) {
@@ -746,7 +750,7 @@
 
     // tabs
     var PAGE_CAPTIONS = {
-      partners: "Joyful giving in gospel partnership.",
+      partners: "Joyfully praying in gospel partnership.",
       giving: "Cheerful giving from overflowing grace."
     };
     document.querySelectorAll("nav.tabs button").forEach(function (btn) {
