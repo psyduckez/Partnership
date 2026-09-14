@@ -179,34 +179,41 @@
     return new Date(y, m + monthRange, 0);
   }
 
-  function currentWindowDays() {
-    var today = todayAtMidnight();
-    var end = endOfMonthRange(settings.monthRange, today);
-    var days = Math.round((end.getTime() - today.getTime()) / DAY_MS);
-    return Math.max(1, days);
-  }
-
-  // Evenly distribute unprayed partners' next prayer date across the configured
-  // month-range window, in the order they were added. Prayed partners keep the
-  // fixed date they were prayed on, until a new cycle begins.
+  
+  // Evenly distribute every partner's next prayer date across the configured
+  // month-range window, starting from the 1st of the current month through the
+  // end of the range's final month. This only ever runs when a new prayer
+  // cycle is explicitly started - dates otherwise stay fixed once assigned.
   function recomputeSchedule() {
     var unprayed = partners.filter(function (p) { return !p.prayed; });
     var n = unprayed.length;
     if (n === 0) return;
     var today = todayAtMidnight();
-    var windowDays = currentWindowDays();
+    var windowStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    var windowEnd = endOfMonthRange(settings.monthRange, today);
+    var windowDays = Math.max(1, Math.round((windowEnd.getTime() - windowStart.getTime()) / DAY_MS));
 
     unprayed.forEach(function (p, i) {
       var offsetDays = Math.round(((i + 0.5) * windowDays) / n);
-      offsetDays = Math.max(1, offsetDays);
-      var d = new Date(today.getTime() + offsetDays * DAY_MS);
+      offsetDays = Math.max(0, Math.min(windowDays, offsetDays));
+      var d = new Date(windowStart.getTime() + offsetDays * DAY_MS);
       p.scheduled = toISODate(d);
     });
   }
 
+  // A partner that doesn't have a scheduled date yet (brand new, or legacy data
+  // from before this feature) gets parked at the end of the current cycle
+  // window without disturbing anyone else's already-assigned date. It'll fall
+  // into its proper evenly-spaced slot the next time a new cycle starts.
+  function assignFallbackDate(p) {
+    var today = todayAtMidnight();
+    var end = endOfMonthRange(settings.monthRange, today);
+    p.scheduled = toISODate(end);
+  }
+
   // Starts a new prayer cycle: clears every "prayed" mark and redistributes every
-  // partner's scheduled date evenly from today through the end of the selected
-  // month range.
+  // partner's scheduled date evenly from the start of this month through the
+  // end of the selected month range.
   function startNewCycle(monthRange) {
     settings.monthRange = monthRange;
     saveSettings();
@@ -226,16 +233,16 @@
     }
   }
 
-  // Once per calendar month, shuffle the partner order and redistribute
-  // scheduled dates accordingly - keeps the prayer rotation from always
-  // landing on people in the same order every cycle.
+  // Once per calendar month, shuffle the partner order so the rotation doesn't
+  // always land the same way. Scheduled dates are untouched - they only change
+  // when a new cycle is explicitly started - but the new order determines how
+  // the next cycle's dates get distributed.
   function shuffleForNewMonthIfNeeded() {
     var todayIdx = monthIndex(todayAtMidnight());
     if (settings.lastShuffleMonthIndex === todayIdx) return false;
     if (partners.length > 1) shuffleArray(partners);
     settings.lastShuffleMonthIndex = todayIdx;
     saveSettings();
-    recomputeSchedule();
     return true;
   }
 
@@ -258,11 +265,14 @@
     renderProgress();
   }
 
+  var swipeAnimating = false;
+
   function renderNextUp() {
+    var wrap = document.getElementById("next-up-wrap");
     var card = document.getElementById("next-up-card");
     var unprayed = partners.filter(function (p) { return !p.prayed && p.scheduled; });
     if (unprayed.length === 0) {
-      card.style.display = "none";
+      wrap.style.display = "none";
       return;
     }
     var next = unprayed.reduce(function (soonest, p) {
@@ -271,7 +281,22 @@
     document.getElementById("next-up-name").textContent = next.name;
     document.getElementById("next-up-ministry").textContent = next.ministry;
     document.getElementById("next-up-date").textContent = formatMonthDay(next.scheduled);
-    card.style.display = "flex";
+    card.dataset.partnerId = next.id;
+    wrap.style.display = "block";
+
+    // Only snap the card back to a neutral resting position when we're not in
+    // the middle of our own swipe fly-off/fade-in animation sequence (which
+    // manages these same styles itself, step by step).
+    if (!swipeAnimating) {
+      card.classList.remove("snap-transition", "dragging");
+      card.style.transition = "none";
+      card.style.transform = "translateX(0) rotate(0deg)";
+      card.style.opacity = "1";
+      document.getElementById("badge-prayed").style.opacity = 0;
+      document.getElementById("badge-skip").style.opacity = 0;
+      void card.offsetWidth;
+      card.style.transition = "";
+    }
   }
 
   function renderProgress() {
@@ -452,7 +477,7 @@
       scheduled: null
     };
     partners.push(p);
-    recomputeSchedule();
+    assignFallbackDate(p);
     save();
     render();
 
@@ -470,14 +495,12 @@
       if (reordered.indexOf(p) === -1) reordered.push(p);
     });
     partners = reordered;
-    recomputeSchedule();
     save();
     render();
   }
 
   function removePartner(id) {
     partners = partners.filter(function (p) { return p.id !== id; });
-    recomputeSchedule();
     save();
     render();
   }
@@ -497,14 +520,49 @@
     }
   }
 
+  // Marking someone as prayed (or un-praying them) never touches their
+  // scheduled date - dates only change when a new cycle is started.
   function togglePrayed(id, checked) {
     var p = findPartner(id);
     if (!p) return;
     p.prayed = checked;
-    if (checked) {
-      p.scheduled = toISODate(todayAtMidnight());
+    save();
+    render();
+  }
+
+  // Swiping the "Next up" card right marks that partner prayed for - same
+  // effect as ticking their Prayed checkbox, dates untouched.
+  function markPrayedFromCard(id) {
+    var p = findPartner(id);
+    if (!p) return;
+    p.prayed = true;
+    save();
+    render();
+  }
+
+  // Swiping the "Next up" card left skips them for now: they move to the
+  // bottom of the list and take the last date in the current schedule, while
+  // everyone who was due after them moves up one slot to an earlier date.
+  function skipFromCard(id) {
+    var p = findPartner(id);
+    if (!p) return;
+
+    var queue = partners
+      .filter(function (x) { return !x.prayed && x.scheduled; })
+      .sort(function (a, b) { return parseISODate(a.scheduled).getTime() - parseISODate(b.scheduled).getTime(); });
+
+    var idx = queue.indexOf(p);
+    if (idx !== -1) {
+      var dates = queue.map(function (x) { return x.scheduled; });
+      for (var k = idx + 1; k < queue.length; k++) {
+        queue[k].scheduled = dates[k - 1];
+      }
+      p.scheduled = dates[dates.length - 1];
     }
-    recomputeSchedule();
+
+    partners = partners.filter(function (x) { return x.id !== id; });
+    partners.push(p);
+
     save();
     render();
   }
@@ -580,26 +638,117 @@
     });
   }
 
+  // ---------- next-up swipe gesture ----------
+  function initNextUpSwipe() {
+    var card = document.getElementById("next-up-card");
+    var badgePrayed = document.getElementById("badge-prayed");
+    var badgeSkip = document.getElementById("badge-skip");
+    var THRESHOLD = 90;
+    var dragging = false;
+    var startX = 0;
+    var dx = 0;
+
+    function setBadgeOpacity(amount) {
+      var t = Math.min(Math.abs(amount) / THRESHOLD, 1);
+      badgePrayed.style.opacity = amount > 0 ? t : 0;
+      badgeSkip.style.opacity = amount < 0 ? t : 0;
+    }
+
+    function onPointerDown(e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      dragging = true;
+      startX = e.clientX;
+      dx = 0;
+      card.classList.remove("snap-transition");
+      card.classList.add("dragging");
+      if (card.setPointerCapture) {
+        try { card.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!dragging) return;
+      dx = e.clientX - startX;
+      var rotate = dx / 18;
+      card.style.transform = "translateX(" + dx + "px) rotate(" + rotate + "deg)";
+      setBadgeOpacity(dx);
+    }
+
+    function onPointerUp() {
+      if (!dragging) return;
+      dragging = false;
+      card.classList.remove("dragging");
+      var id = card.dataset.partnerId;
+      var finalDx = dx;
+      dx = 0;
+
+      if (Math.abs(finalDx) >= THRESHOLD && id) {
+        swipeAnimating = true;
+        var direction = finalDx > 0 ? 1 : -1;
+        var flyX = direction * (card.offsetWidth + window.innerWidth * 0.6);
+        card.classList.add("snap-transition");
+        card.style.transform = "translateX(" + flyX + "px) rotate(" + (direction * 18) + "deg)";
+        card.style.opacity = "0";
+
+        setTimeout(function () {
+          if (direction > 0) {
+            markPrayedFromCard(id);
+          } else {
+            skipFromCard(id);
+          }
+          // Snap instantly (no transition) to a slightly shrunk, invisible
+          // state, then transition back to full size/opacity so the next
+          // person's card feels like it's gently arriving.
+          card.classList.remove("snap-transition");
+          card.style.transition = "none";
+          card.style.transform = "translateX(0) scale(0.96)";
+          card.style.opacity = "0";
+          void card.offsetWidth;
+          card.classList.add("snap-transition");
+          card.style.transform = "translateX(0) scale(1)";
+          card.style.opacity = "1";
+          setBadgeOpacity(0);
+
+          setTimeout(function () { swipeAnimating = false; }, 300);
+        }, 240);
+      } else {
+        card.classList.add("snap-transition");
+        card.style.transform = "translateX(0) rotate(0deg)";
+        setBadgeOpacity(0);
+      }
+    }
+
+    card.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  }
+
   // ---------- events ----------
   function init() {
     load();
     // Any giving date already in the past rolls forward to its next monthly
     // occurrence so the giving tab always shows the upcoming date.
     var rolled = rollGivingDatesForward();
-    // Once a month, reshuffle the partner order (and redistribute schedules
-    // accordingly) so the rotation doesn't always land the same way.
+    // Once a month, reshuffle the partner order so the rotation doesn't always
+    // land the same way (this only affects future "New cycle" distributions -
+    // it never changes anyone's already-assigned scheduled date).
     var shuffled = shuffleForNewMonthIfNeeded();
-    // Only assign schedule dates on first run / for partners that don't have one yet.
-    // Once a date is assigned it stays fixed until the roster changes (add, remove,
-    // or a prayed toggle), so dates don't drift just from reopening the app.
-    var needsSchedule = partners.some(function (p) { return !p.prayed && !p.scheduled; });
-    if (needsSchedule && !shuffled) recomputeSchedule();
-    if (rolled || needsSchedule || shuffled) save();
+    // Dates only change when a new cycle is explicitly started. The one
+    // exception: a partner with no date at all yet (brand new, or legacy data)
+    // gets a fallback slot so they still show up somewhere on the list.
+    var missingSchedule = partners.filter(function (p) { return !p.prayed && !p.scheduled; });
+    missingSchedule.forEach(function (p) { assignFallbackDate(p); });
+    if (rolled || missingSchedule.length > 0 || shuffled) save();
     document.getElementById("month-range").value = String(settings.monthRange);
     render();
     initDragReorder();
+    initNextUpSwipe();
 
     // tabs
+    var PAGE_CAPTIONS = {
+      partners: "Joyful giving in gospel partnership.",
+      giving: "Cheerful giving from overflowing grace."
+    };
     document.querySelectorAll("nav.tabs button").forEach(function (btn) {
       btn.addEventListener("click", function () {
         document.querySelectorAll("nav.tabs button").forEach(function (b) { b.classList.remove("active"); });
@@ -607,6 +756,8 @@
         var view = btn.dataset.view;
         document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
         document.getElementById("view-" + view).classList.add("active");
+        var caption = document.getElementById("page-caption");
+        if (caption && PAGE_CAPTIONS[view]) caption.textContent = PAGE_CAPTIONS[view];
       });
     });
 

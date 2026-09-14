@@ -95,31 +95,12 @@
     display:block;
   }
 
-  .verse{
+  .caption{
     margin: 0;
-    max-width: 48ch;
-    border: none;
-    padding: 0;
-  }
-
-  .verse-text{
-    margin: 0;
+    max-width: 46ch;
     color: var(--ink-soft);
-    font-family: var(--serif);
-    font-style: italic;
     font-size: 15px;
-    line-height: 1.45;
-  }
-
-  .verse-ref{
-    display:block;
-    margin-top: 4px;
-    font-family: var(--sans);
-    font-style: normal;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--gold-deep);
-    letter-spacing: 0.02em;
+    line-height: 1.4;
   }
 
   nav.tabs{
@@ -159,15 +140,65 @@
   .view.active{ display:block; }
 
   /* ---- next up card ---- */
+  .next-up-wrap{
+    margin-top: 26px;
+  }
+
   .next-up-card{
+    position: relative;
     display:flex;
     align-items: center;
     gap: 14px;
-    margin-top: 26px;
     padding: 16px 18px;
     background: var(--ink);
     border-radius: var(--radius-md);
     flex-wrap: wrap;
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+    will-change: transform;
+    overflow: hidden;
+  }
+
+  .next-up-card.dragging{ cursor: grabbing; }
+
+  .next-up-card.snap-transition{
+    transition: transform 0.28s ease, opacity 0.28s ease;
+  }
+
+  .swipe-badge{
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 16px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    pointer-events: none;
+    border: 2px solid currentColor;
+    z-index: 2;
+  }
+
+  .swipe-badge-prayed{
+    right: 16px;
+    color: #8FCB9B;
+    background: rgba(95,112,82,0.35);
+  }
+
+  .swipe-badge-skip{
+    left: 16px;
+    color: var(--gold);
+    background: rgba(201,154,61,0.25);
+  }
+
+  .next-up-hint{
+    margin: 8px 4px 0;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: center;
   }
 
   .next-up-label{
@@ -683,10 +714,7 @@
       <img src="logo-header.png" alt="Partnership logo" class="brand-logo" width="52" height="52">
       <div>
         <h1>Partnership</h1>
-        <blockquote class="verse">
-          <p class="verse-text">&ldquo;I thank my God in all my remembrance of you, always in every prayer of mine for you all making my prayer with joy, because of your partnership in the gospel from the first day until now.&rdquo;</p>
-          <cite class="verse-ref">Philippians 1:3&ndash;5 ESV</cite>
-        </blockquote>
+        <p id="page-caption" class="caption">Joyful giving in gospel partnership.</p>
       </div>
     </div>
     <nav class="tabs">
@@ -696,13 +724,18 @@
   </header>
 
   <section id="view-partners" class="view active">
-    <div id="next-up-card" class="next-up-card" style="display:none;">
-      <span class="next-up-label">Next up</span>
-      <div class="next-up-body">
-        <strong id="next-up-name"></strong>
-        <span id="next-up-ministry" class="next-up-ministry"></span>
+    <div id="next-up-wrap" class="next-up-wrap" style="display:none;">
+      <div id="next-up-card" class="next-up-card">
+        <div id="badge-skip" class="swipe-badge swipe-badge-skip">Skip</div>
+        <div id="badge-prayed" class="swipe-badge swipe-badge-prayed">Prayed</div>
+        <span class="next-up-label">Next up</span>
+        <div class="next-up-body">
+          <strong id="next-up-name"></strong>
+          <span id="next-up-ministry" class="next-up-ministry"></span>
+        </div>
+        <span id="next-up-date" class="next-up-date"></span>
       </div>
-      <span id="next-up-date" class="next-up-date"></span>
+      <p class="next-up-hint">Swipe right to mark prayed &middot; swipe left to skip for now</p>
     </div>
 
     <div id="progress-card" class="progress-card" style="display:none;">
@@ -845,6 +878,6 @@
   </div>
 </div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
