@@ -14,7 +14,15 @@
 
   /** @type {Array<Object>} */
   var partners = [];
-  var settings = { monthRange: DEFAULT_MONTH_RANGE, lastShuffleMonthIndex: null };
+  var settings = {
+    monthRange: DEFAULT_MONTH_RANGE,
+    lastShuffleMonthIndex: null,
+    theme: "light",
+    cycleEndDate: null,
+    deferredUntilNewMonth: false,
+    deferredMonthRange: null,
+    lastPromptedForEndDate: null
+  };
   var pendingGivingTargetId = null; // id awaiting an amount from the giving modal
   var pendingGivingIsNewPartner = false;
   var pendingDateStartedId = null;
@@ -37,6 +45,21 @@
         }
         if (parsed && typeof parsed.lastShuffleMonthIndex === "number") {
           settings.lastShuffleMonthIndex = parsed.lastShuffleMonthIndex;
+        }
+        if (parsed && (parsed.theme === "light" || parsed.theme === "dark")) {
+          settings.theme = parsed.theme;
+        }
+        if (parsed && typeof parsed.cycleEndDate === "string") {
+          settings.cycleEndDate = parsed.cycleEndDate;
+        }
+        if (parsed && typeof parsed.deferredUntilNewMonth === "boolean") {
+          settings.deferredUntilNewMonth = parsed.deferredUntilNewMonth;
+        }
+        if (parsed && [1, 2, 3].indexOf(parsed.deferredMonthRange) !== -1) {
+          settings.deferredMonthRange = parsed.deferredMonthRange;
+        }
+        if (parsed && typeof parsed.lastPromptedForEndDate === "string") {
+          settings.lastPromptedForEndDate = parsed.lastPromptedForEndDate;
         }
       }
     } catch (e) {
@@ -216,6 +239,10 @@
   // end of the selected month range.
   function startNewCycle(monthRange) {
     settings.monthRange = monthRange;
+    settings.cycleEndDate = toISODate(endOfMonthRange(monthRange, todayAtMidnight()));
+    settings.deferredUntilNewMonth = false;
+    settings.deferredMonthRange = null;
+    settings.lastPromptedForEndDate = null;
     saveSettings();
     partners.forEach(function (p) { p.prayed = false; });
     recomputeSchedule();
@@ -244,6 +271,37 @@
     settings.lastShuffleMonthIndex = todayIdx;
     saveSettings();
     return true;
+  }
+
+  // Checks whether the current prayer cycle has run past its end date. If so,
+  // and the person hasn't already answered for this particular cycle-end
+  // (or is already waiting on a deferred start), surfaces the cycle-end modal
+  // asking them to start a new one now or wait for next month.
+  // Returns true if the modal should be shown.
+  function isCycleEndPromptDue() {
+    var today = todayAtMidnight();
+
+    if (!settings.cycleEndDate) {
+      // First run / upgrading from before this feature existed - just adopt
+      // the current month range silently, nothing to prompt about yet.
+      settings.cycleEndDate = toISODate(endOfMonthRange(settings.monthRange, today));
+      saveSettings();
+      return false;
+    }
+
+    var endDate = parseISODate(settings.cycleEndDate);
+
+    if (settings.deferredUntilNewMonth) {
+      if (monthIndex(today) > monthIndex(endDate)) {
+        startNewCycle(settings.deferredMonthRange || settings.monthRange);
+      }
+      return false;
+    }
+
+    if (today.getTime() > endDate.getTime()) {
+      return settings.lastPromptedForEndDate !== settings.cycleEndDate;
+    }
+    return false;
   }
 
   function scheduleColorClass(partner) {
@@ -289,6 +347,7 @@
     // manages these same styles itself, step by step).
     if (!swipeAnimating) {
       card.classList.remove("snap-transition", "dragging");
+      wrap.classList.remove("revealed");
       card.style.transition = "none";
       card.style.transform = "translateX(0) rotate(0deg)";
       card.style.opacity = "1";
@@ -645,6 +704,7 @@
   // ---------- next-up swipe gesture ----------
   function initNextUpSwipe() {
     var card = document.getElementById("next-up-card");
+    var wrap = document.getElementById("next-up-wrap");
     var overlayPrayed = document.getElementById("overlay-prayed");
     var overlaySkip = document.getElementById("overlay-skip");
     var THRESHOLD = 90;
@@ -665,6 +725,7 @@
       dx = 0;
       card.classList.remove("snap-transition");
       card.classList.add("dragging");
+      wrap.classList.add("revealed");
       if (card.setPointerCapture) {
         try { card.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       }
@@ -682,6 +743,7 @@
       if (!dragging) return;
       dragging = false;
       card.classList.remove("dragging");
+      wrap.classList.remove("revealed");
       var id = card.dataset.partnerId;
       var finalDx = dx;
       dx = 0;
@@ -727,9 +789,89 @@
     document.addEventListener("pointerup", onPointerUp);
   }
 
+  // ---------- theme ----------
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    var label = document.getElementById("theme-toggle-label");
+    if (label) label.textContent = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  }
+
+  function toggleTheme() {
+    settings.theme = settings.theme === "dark" ? "light" : "dark";
+    saveSettings();
+    applyTheme(settings.theme);
+  }
+
+  // ---------- backup: export / import ----------
+  function exportData() {
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      app: "Partnership",
+      version: 1,
+      partners: partners,
+      settings: settings
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    var stamp = toISODate(todayAtMidnight());
+    a.href = url;
+    a.download = "partnership-backup-" + stamp + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showImportExportMessage("Backup downloaded.");
+  }
+
+  function importDataFromText(text) {
+    var parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      showImportExportMessage("That file doesn't look like a valid backup.");
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.partners)) {
+      showImportExportMessage("That file doesn't look like a valid backup.");
+      return;
+    }
+    var proceed = confirm(
+      "Importing will replace everything currently in the app (" + partners.length + " partner" +
+      (partners.length === 1 ? "" : "s") + ") with " + parsed.partners.length +
+      " partner" + (parsed.partners.length === 1 ? "" : "s") + " from the backup. Continue?"
+    );
+    if (!proceed) return;
+
+    partners = parsed.partners;
+    if (parsed.settings && typeof parsed.settings === "object") {
+      settings.monthRange = [1, 2, 3].indexOf(parsed.settings.monthRange) !== -1 ? parsed.settings.monthRange : settings.monthRange;
+      settings.lastShuffleMonthIndex = typeof parsed.settings.lastShuffleMonthIndex === "number" ? parsed.settings.lastShuffleMonthIndex : settings.lastShuffleMonthIndex;
+      settings.theme = (parsed.settings.theme === "light" || parsed.settings.theme === "dark") ? parsed.settings.theme : settings.theme;
+      settings.cycleEndDate = typeof parsed.settings.cycleEndDate === "string" ? parsed.settings.cycleEndDate : settings.cycleEndDate;
+      settings.deferredUntilNewMonth = !!parsed.settings.deferredUntilNewMonth;
+      settings.deferredMonthRange = [1, 2, 3].indexOf(parsed.settings.deferredMonthRange) !== -1 ? parsed.settings.deferredMonthRange : null;
+      settings.lastPromptedForEndDate = typeof parsed.settings.lastPromptedForEndDate === "string" ? parsed.settings.lastPromptedForEndDate : null;
+    }
+    save();
+    saveSettings();
+    showImportExportMessage("Backup imported successfully.");
+    document.getElementById("month-range").value = String(settings.monthRange);
+    applyTheme(settings.theme);
+    render();
+  }
+
+  function showImportExportMessage(text) {
+    var el = document.getElementById("import-export-msg");
+    if (!el) return;
+    el.textContent = text;
+    el.style.display = "block";
+  }
+
   // ---------- events ----------
   function init() {
     load();
+    applyTheme(settings.theme);
     // Any giving date already in the past rolls forward to its next monthly
     // occurrence so the giving tab always shows the upcoming date.
     var rolled = rollGivingDatesForward();
@@ -748,9 +890,17 @@
     initDragReorder();
     initNextUpSwipe();
 
+    // If the current prayer cycle has run past its end date, ask whether to
+    // start a new one now or wait for next month.
+    if (isCycleEndPromptDue()) {
+      document.getElementById("cycle-end-length").value = String(settings.monthRange);
+      document.getElementById("cycle-end-timing").value = "today";
+      openModal("cycle-end-modal");
+    }
+
     // tabs
     var PAGE_CAPTIONS = {
-      partners: "Joyfully praying in gospel partnership.",
+      partners: "Joyful prayer in gospel partnership.",
       giving: "Cheerful giving from overflowing grace."
     };
     document.querySelectorAll("nav.tabs button").forEach(function (btn) {
@@ -781,6 +931,56 @@
       var proceed = confirm("Start a new " + label + " prayer cycle?");
       if (!proceed) return;
       startNewCycle(val);
+    });
+
+    // settings modal
+    document.getElementById("settings-btn").addEventListener("click", function () {
+      document.getElementById("import-export-msg").style.display = "none";
+      openModal("settings-modal");
+    });
+
+    // theme toggle
+    document.getElementById("theme-toggle-btn").addEventListener("click", function () {
+      toggleTheme();
+    });
+
+    // export / import
+    document.getElementById("export-btn").addEventListener("click", function () {
+      exportData();
+    });
+    document.getElementById("import-btn").addEventListener("click", function () {
+      document.getElementById("import-file-input").click();
+    });
+    document.getElementById("import-file-input").addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        importDataFromText(String(reader.result));
+        e.target.value = "";
+      };
+      reader.onerror = function () {
+        showImportExportMessage("Couldn't read that file.");
+        e.target.value = "";
+      };
+      reader.readAsText(file);
+    });
+
+    // cycle-end prompt
+    document.getElementById("cycle-end-confirm-btn").addEventListener("click", function () {
+      var timing = document.getElementById("cycle-end-timing").value;
+      var length = parseInt(document.getElementById("cycle-end-length").value, 10);
+      if ([1, 2, 3].indexOf(length) === -1) length = settings.monthRange;
+
+      if (timing === "today") {
+        startNewCycle(length);
+      } else {
+        settings.deferredUntilNewMonth = true;
+        settings.deferredMonthRange = length;
+        settings.lastPromptedForEndDate = settings.cycleEndDate;
+        saveSettings();
+      }
+      closeModal("cycle-end-modal");
     });
 
     // giving table sortable headers
