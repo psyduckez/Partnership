@@ -26,7 +26,7 @@
   var pendingGivingTargetId = null; // id awaiting an amount from the giving modal
   var pendingGivingIsNewPartner = false;
   var pendingDateStartedId = null;
-  var givingSort = { column: null, dir: "asc" };
+  var givingSort = { column: "date", dir: "asc" };
 
   // ---------- persistence ----------
   function load() {
@@ -555,7 +555,12 @@
     partners.forEach(function (p) {
       if (reordered.indexOf(p) === -1) reordered.push(p);
     });
-    partners = reordered;
+    // Keep prayed partners together at the top, unprayed below - dragging an
+    // unprayed partner up above a prayed one just bumps them to the top of
+    // the unprayed group instead of actually mixing the two groups.
+    var prayedGroup = reordered.filter(function (p) { return p.prayed; });
+    var unprayedGroup = reordered.filter(function (p) { return !p.prayed; });
+    partners = prayedGroup.concat(unprayedGroup);
     // Re-spread scheduled dates to match the new order.
     recomputeSchedule();
     save();
@@ -583,12 +588,25 @@
     }
   }
 
+  // Moves a partner to the boundary between the prayed and unprayed groups:
+  // marking prayed sends them to the bottom of the prayed group (top of the
+  // list stays ordered by "who was prayed for first"); un-praying sends them
+  // to the top of the unprayed group, ready to come up again.
+  function moveToPrayedBoundary(p, makePrayed) {
+    partners = partners.filter(function (x) { return x.id !== p.id; });
+    p.prayed = makePrayed;
+    var insertIndex = partners.filter(function (x) { return x.prayed; }).length;
+    partners.splice(insertIndex, 0, p);
+  }
+
   // Marking someone as prayed (or un-praying them) never touches their
-  // scheduled date - dates only change when a new cycle is started.
+  // scheduled date - dates only change when a new cycle is started. It does
+  // move them: prayed partners collect at the top of the list in the order
+  // they were prayed for, everyone else stays below them.
   function togglePrayed(id, checked) {
     var p = findPartner(id);
     if (!p) return;
-    p.prayed = checked;
+    moveToPrayedBoundary(p, checked);
     save();
     render();
   }
@@ -598,7 +616,7 @@
   function markPrayedFromCard(id) {
     var p = findPartner(id);
     if (!p) return;
-    p.prayed = true;
+    moveToPrayedBoundary(p, true);
     save();
     render();
   }
@@ -789,11 +807,106 @@
     document.addEventListener("pointerup", onPointerUp);
   }
 
+  // ---------- install as app ----------
+  var deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+
+  var INSTALL_GROUPS = {
+    iosSafari: {
+      title: "iPhone or iPad (Safari)",
+      steps: [
+        "Tap the Share icon (a square with an arrow pointing up) in the toolbar.",
+        "Scroll down and tap \u201cAdd to Home Screen.\u201d",
+        "Tap \u201cAdd\u201d in the top right."
+      ]
+    },
+    androidChrome: {
+      title: "Android (Chrome)",
+      steps: [
+        "Tap the \u22ee menu in the top right.",
+        "Tap \u201cInstall app\u201d (or \u201cAdd to Home screen\u201d).",
+        "Confirm by tapping \u201cInstall.\u201d"
+      ]
+    },
+    samsungInternet: {
+      title: "Android (Samsung Internet)",
+      steps: [
+        "Tap the menu icon (\u2630) at the bottom of the screen.",
+        "Tap \u201cAdd page to,\u201d then \u201cHome screen.\u201d",
+        "Confirm by tapping \u201cAdd.\u201d"
+      ]
+    },
+    desktopChrome: {
+      title: "Desktop (Chrome or Edge)",
+      steps: [
+        "Look for an install icon in the address bar (a small monitor with a down arrow).",
+        "Click it and choose \u201cInstall.\u201d",
+        "If you don't see it, open the browser's \u22ee or \u2026 menu and look for \u201cInstall Partnership\u2026\u201d"
+      ]
+    },
+    other: {
+      title: "Other browsers",
+      steps: [
+        "Open your browser's menu.",
+        "Look for \u201cAdd to Home screen,\u201d \u201cInstall app,\u201d or \u201cInstall site as shortcut.\u201d",
+        "Follow the prompts to confirm."
+      ]
+    }
+  };
+
+  function detectPrimaryInstallGroup() {
+    var ua = navigator.userAgent || "";
+    var isIOS = /iPad|iPhone|iPod/.test(ua);
+    var isSamsung = /SamsungBrowser/.test(ua);
+    var isAndroid = /Android/.test(ua);
+    if (isIOS) return "iosSafari";
+    if (isSamsung) return "samsungInternet";
+    if (isAndroid) return "androidChrome";
+    return "desktopChrome";
+  }
+
+  function installGroupHTML(key) {
+    var g = INSTALL_GROUPS[key];
+    if (!g) return "";
+    var items = g.steps.map(function (s) { return "<li>" + s + "</li>"; }).join("");
+    return '<div class="install-group"><h5>' + g.title + "</h5><ol>" + items + "</ol></div>";
+  }
+
+  function isAlreadyInstalled() {
+    return window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+  }
+
+  function openInstallInstructions() {
+    var primaryKey = detectPrimaryInstallGroup();
+    var intro = document.getElementById("install-modal-intro");
+    if (isAlreadyInstalled()) {
+      intro.textContent = "Looks like you're already using the installed app!";
+    } else {
+      intro.textContent = "Steps depend on your browser - here's the one that looks like yours:";
+    }
+    document.getElementById("install-steps-primary").innerHTML = installGroupHTML(primaryKey);
+    var otherKeys = Object.keys(INSTALL_GROUPS).filter(function (k) { return k !== primaryKey; });
+    document.getElementById("install-steps-all").innerHTML = otherKeys.map(installGroupHTML).join("");
+    document.getElementById("install-steps-all").style.display = "none";
+    document.getElementById("install-show-all-btn").style.display = "inline-block";
+    openModal("install-modal");
+  }
+
   // ---------- theme ----------
   function applyTheme(theme) {
-    document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    var resolved = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = resolved;
+    // Also set this directly (in addition to the CSS `color-scheme` property
+    // on :root) - some mobile browsers with their own forced dark/night mode
+    // (Samsung Internet in particular) are more reliable about respecting a
+    // page's chosen scheme when it's set as an inline style as well.
+    document.documentElement.style.colorScheme = resolved;
     var label = document.getElementById("theme-toggle-label");
-    if (label) label.textContent = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    if (label) label.textContent = resolved === "dark" ? "Switch to light mode" : "Switch to dark mode";
   }
 
   function toggleTheme() {
@@ -942,6 +1055,22 @@
     // theme toggle
     document.getElementById("theme-toggle-btn").addEventListener("click", function () {
       toggleTheme();
+    });
+
+    // install as app
+    document.getElementById("install-app-btn").addEventListener("click", function () {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.then(function () {
+          deferredInstallPrompt = null;
+        });
+      } else {
+        openInstallInstructions();
+      }
+    });
+    document.getElementById("install-show-all-btn").addEventListener("click", function (e) {
+      document.getElementById("install-steps-all").style.display = "block";
+      e.target.style.display = "none";
     });
 
     // export / import
@@ -1122,10 +1251,13 @@
     // so code changes show up on next launch instead of staying stuck on a
     // cached copy.
     if ("serviceWorker" in navigator) {
+      var swRegistration = null;
+
       window.addEventListener("load", function () {
         navigator.serviceWorker
           .register("sw.js")
           .then(function (reg) {
+            swRegistration = reg;
             reg.update();
             reg.addEventListener("updatefound", function () {
               var installing = reg.installing;
@@ -1147,6 +1279,17 @@
           reloadedOnce = true;
           window.location.reload();
         });
+      });
+
+      // Re-check for a newer version whenever the app is reopened or comes
+      // back into view (e.g. switching back to this tab, or reopening the
+      // installed app after it was in the background) - not just on the very
+      // first load. This shrinks the window where a stale service worker
+      // could otherwise sit around unnoticed during a long-lived session.
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible" && swRegistration) {
+          swRegistration.update();
+        }
       });
     }
   }
