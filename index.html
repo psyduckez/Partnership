@@ -29,6 +29,7 @@
     --gold-deep: #A87E2F;
     --moss: #5F7052;
     --green-vivid: #2A7440;
+    --swipe-prayed-bg: rgba(36,140,74,0.95);
     --brick: #A6402C;
     --grey-row: #ECE9E0;
     --grey-text: #93917E93;
@@ -55,6 +56,7 @@
     --gold-deep: #D8AE5E;
     --moss: #8FAF97;
     --green-vivid: #4FA868;
+    --swipe-prayed-bg: rgba(58,196,110,0.95);
     --brick: #E08974;
     --grey-row: #33362C;
     --grey-text: #93917E93;
@@ -218,7 +220,7 @@
     color: #fff;
   }
 
-  .swipe-overlay-prayed{ background: rgba(42,116,64,0.94); }
+  .swipe-overlay-prayed{ background: var(--swipe-prayed-bg); }
   .swipe-overlay-skip{ background: rgba(173,52,38,0.94); }
 
   /* The advisory hint text stays faint at rest and only sharpens into view
@@ -427,8 +429,12 @@
   /* ---- table ---- */
   .table-scroll{
     margin-top: 20px;
+    padding: 6px 16px;
     overflow-x: auto;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    box-shadow: 0 1px 3px rgba(34,48,31,0.05);
   }
 
   table{
@@ -443,7 +449,7 @@
     font-weight: 600;
     font-size: 13px;
     color: var(--ink-soft);
-    padding: 0 12px 10px;
+    padding: 10px 12px 10px;
     border-bottom: 1px solid var(--hairline-strong);
   }
 
@@ -458,6 +464,7 @@
   }
 
   tbody tr{ transition: background-color 0.25s ease; }
+  tbody tr:not(.prayed):hover{ background: var(--paper); }
   tbody tr.prayed{ background: var(--grey-row); }
   tbody tr.prayed td{ color: #7C7A6D; }
   tbody tr.prayed .name-cell strong{ color: #7C7A6D; }
@@ -570,7 +577,12 @@
   .giving-summary{
     display:flex;
     gap: 32px;
-    margin: 26px 0 6px;
+    margin-top: 20px;
+    padding: 18px 20px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 3px rgba(34,48,31,0.05);
     flex-wrap: wrap;
   }
 
@@ -585,7 +597,8 @@
     color: var(--ink-soft);
   }
 
-  .amount-cell{ font-variant-numeric: tabular-nums; }
+  .amount-cell{ font-variant-numeric: tabular-nums; text-align: right; }
+  th[data-sort="amount"]{ text-align: right; }
   .editable{
     cursor: pointer;
     border-bottom: 1px dotted var(--hairline-strong);
@@ -789,9 +802,10 @@
      fits the screen width without a horizontal scrollbar ---- */
   @media (max-width: 520px){
     .wrap{ padding: 24px 10px 16px; }
-    .table-scroll{ overflow-x: visible; }
+    .table-scroll{ overflow-x: visible; padding: 6px 8px; }
+    .giving-summary{ padding: 14px 16px; }
 
-    thead th{ padding: 0 3px 8px; font-size: 10.5px; }
+    thead th{ padding: 6px 3px 8px; font-size: 10.5px; }
     tbody td{ padding: 10px 3px; font-size: 13px; }
 
     .name-cell strong{ font-size: 14px; }
@@ -1034,11 +1048,9 @@
 <div class="modal-backdrop" id="install-modal">
   <div class="modal">
     <h3>Install as an app</h3>
-    <p class="field-hint" id="install-modal-intro" style="margin-top:-6px;">Steps depend on your browser:</p>
+    <p class="field-hint" id="install-modal-intro" style="margin-top:-6px;">Pick your device:</p>
 
     <div class="install-steps" id="install-steps-primary"></div>
-    <button type="button" id="install-show-all-btn" class="btn btn-ghost" style="padding-left:0; margin-top:4px;">Show steps for other browsers</button>
-    <div class="install-steps" id="install-steps-all" style="display:none;"></div>
 
     <div class="modal-actions">
       <button type="button" class="btn btn-primary" data-close="install-modal">Got it</button>
@@ -1076,6 +1088,6 @@
   </div>
 </div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

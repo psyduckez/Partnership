@@ -560,9 +560,27 @@
     // the unprayed group instead of actually mixing the two groups.
     var prayedGroup = reordered.filter(function (p) { return p.prayed; });
     var unprayedGroup = reordered.filter(function (p) { return !p.prayed; });
+
+    // Reassign the EXISTING pool of scheduled dates (sorted earliest-first)
+    // to the unprayed group in their new order, rather than recalculating
+    // fresh dates from scratch. This way reordering only changes who is due
+    // on which date - it doesn't rescatter every date across the whole cycle
+    // window each time someone gets moved.
+    var existingDates = unprayedGroup
+      .map(function (p) { return p.scheduled; })
+      .filter(Boolean)
+      .sort(function (a, b) { return parseISODate(a).getTime() - parseISODate(b).getTime(); });
+
     partners = prayedGroup.concat(unprayedGroup);
-    // Re-spread scheduled dates to match the new order.
-    recomputeSchedule();
+
+    if (existingDates.length === unprayedGroup.length) {
+      unprayedGroup.forEach(function (p, i) { p.scheduled = existingDates[i]; });
+    } else {
+      // Fallback for the rare case a partner has no date yet - fall back to
+      // a full recompute rather than leaving anyone undated.
+      recomputeSchedule();
+    }
+
     save();
     render();
   }
@@ -815,57 +833,27 @@
   });
 
   var INSTALL_GROUPS = {
-    iosSafari: {
-      title: "iPhone or iPad (Safari)",
+    android: {
+      title: "Android",
       steps: [
-        "Tap the Share icon (a square with an arrow pointing up) in the toolbar.",
-        "Scroll down and tap \u201cAdd to Home Screen.\u201d",
-        "Tap \u201cAdd\u201d in the top right."
+        "Tap your browser's menu (\u22ee or \u2630).",
+        "Tap \u201cInstall app\u201d or \u201cAdd to Home screen.\u201d",
+        "Confirm to finish."
       ]
     },
-    androidChrome: {
-      title: "Android (Chrome)",
+    apple: {
+      title: "iPhone or iPad",
       steps: [
-        "Tap the \u22ee menu in the top right.",
-        "Tap \u201cInstall app\u201d (or \u201cAdd to Home screen\u201d).",
-        "Confirm by tapping \u201cInstall.\u201d"
-      ]
-    },
-    samsungInternet: {
-      title: "Android (Samsung Internet)",
-      steps: [
-        "Tap the menu icon (\u2630) at the bottom of the screen.",
-        "Tap \u201cAdd page to,\u201d then \u201cHome screen.\u201d",
-        "Confirm by tapping \u201cAdd.\u201d"
-      ]
-    },
-    desktopChrome: {
-      title: "Desktop (Chrome or Edge)",
-      steps: [
-        "Look for an install icon in the address bar (a small monitor with a down arrow).",
-        "Click it and choose \u201cInstall.\u201d",
-        "If you don't see it, open the browser's \u22ee or \u2026 menu and look for \u201cInstall Partnership\u2026\u201d"
-      ]
-    },
-    other: {
-      title: "Other browsers",
-      steps: [
-        "Open your browser's menu.",
-        "Look for \u201cAdd to Home screen,\u201d \u201cInstall app,\u201d or \u201cInstall site as shortcut.\u201d",
-        "Follow the prompts to confirm."
+        "Tap the Share icon in Safari.",
+        "Tap \u201cAdd to Home Screen.\u201d",
+        "Tap \u201cAdd.\u201d"
       ]
     }
   };
 
   function detectPrimaryInstallGroup() {
-    var ua = navigator.userAgent || "";
-    var isIOS = /iPad|iPhone|iPod/.test(ua);
-    var isSamsung = /SamsungBrowser/.test(ua);
-    var isAndroid = /Android/.test(ua);
-    if (isIOS) return "iosSafari";
-    if (isSamsung) return "samsungInternet";
-    if (isAndroid) return "androidChrome";
-    return "desktopChrome";
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "");
+    return isIOS ? "apple" : "android";
   }
 
   function installGroupHTML(key) {
@@ -882,17 +870,13 @@
 
   function openInstallInstructions() {
     var primaryKey = detectPrimaryInstallGroup();
+    var otherKey = primaryKey === "apple" ? "android" : "apple";
     var intro = document.getElementById("install-modal-intro");
-    if (isAlreadyInstalled()) {
-      intro.textContent = "Looks like you're already using the installed app!";
-    } else {
-      intro.textContent = "Steps depend on your browser - here's the one that looks like yours:";
-    }
-    document.getElementById("install-steps-primary").innerHTML = installGroupHTML(primaryKey);
-    var otherKeys = Object.keys(INSTALL_GROUPS).filter(function (k) { return k !== primaryKey; });
-    document.getElementById("install-steps-all").innerHTML = otherKeys.map(installGroupHTML).join("");
-    document.getElementById("install-steps-all").style.display = "none";
-    document.getElementById("install-show-all-btn").style.display = "inline-block";
+    intro.textContent = isAlreadyInstalled()
+      ? "Looks like you're already using the installed app!"
+      : "Pick your device:";
+    document.getElementById("install-steps-primary").innerHTML =
+      installGroupHTML(primaryKey) + installGroupHTML(otherKey);
     openModal("install-modal");
   }
 
@@ -905,6 +889,11 @@
     // (Samsung Internet in particular) are more reliable about respecting a
     // page's chosen scheme when it's set as an inline style as well.
     document.documentElement.style.colorScheme = resolved;
+    // Keep the browser chrome (status bar / toolbar) colour in sync with the
+    // theme too - another small signal that this page genuinely supports
+    // both schemes itself, rather than needing a browser-level override.
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", resolved === "dark" ? "#1E211C" : "#22301F");
     var label = document.getElementById("theme-toggle-label");
     if (label) label.textContent = resolved === "dark" ? "Switch to light mode" : "Switch to dark mode";
   }
@@ -1067,10 +1056,6 @@
       } else {
         openInstallInstructions();
       }
-    });
-    document.getElementById("install-show-all-btn").addEventListener("click", function (e) {
-      document.getElementById("install-steps-all").style.display = "block";
-      e.target.style.display = "none";
     });
 
     // export / import
