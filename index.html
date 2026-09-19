@@ -576,14 +576,30 @@
   /* ---- giving tab ---- */
   .giving-summary{
     display:flex;
-    gap: 32px;
+    align-items: center;
+    gap: 20px;
     margin-top: 20px;
     padding: 18px 20px;
     background: var(--surface);
     border: 1px solid var(--hairline);
     border-radius: var(--radius-md);
     box-shadow: 0 1px 3px rgba(34,48,31,0.05);
+    transition: padding 0.2s ease;
+  }
+
+  .giving-summary-stats{
+    display:flex;
+    gap: 32px;
     flex-wrap: wrap;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .giving-summary.collapsed{ padding-top: 10px; padding-bottom: 10px; }
+  .giving-summary.collapsed .giving-summary-stats{
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
   }
 
   .giving-summary .stat .num{
@@ -596,6 +612,26 @@
     font-size: 13px;
     color: var(--ink-soft);
   }
+
+  .giving-summary-toggle{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    flex-shrink: 0;
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--hairline-strong);
+    border-radius: var(--radius-full);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .giving-summary-toggle:hover{ color: var(--ink); background: var(--paper); }
+  .giving-summary-toggle svg{ transition: transform 0.2s ease; }
+  .giving-summary.collapsed .giving-summary-toggle svg{ transform: rotate(180deg); }
 
   .amount-cell{ font-variant-numeric: tabular-nums; text-align: right; }
   th[data-sort="amount"]{ text-align: right; }
@@ -899,15 +935,22 @@
   </section>
 
   <section id="view-giving" class="view">
-    <div class="giving-summary">
-      <div class="stat">
-        <span class="num" id="giving-total">$0</span>
-        <span class="label">given to date</span>
+    <div class="giving-summary" id="giving-summary">
+      <div class="giving-summary-stats" id="giving-summary-stats">
+        <div class="stat">
+          <span class="num" id="giving-total">$0</span>
+          <span class="label">given to date</span>
+        </div>
+        <div class="stat">
+          <span class="num" id="giving-count">0</span>
+          <span class="label">partners supported financially</span>
+        </div>
       </div>
-      <div class="stat">
-        <span class="num" id="giving-count">0</span>
-        <span class="label">partners supported financially</span>
-      </div>
+      <button type="button" id="giving-summary-toggle" class="giving-summary-toggle" aria-label="Hide summary" title="Hide summary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
     </div>
     <div class="table-scroll">
       <table>
@@ -1028,6 +1071,14 @@
     </div>
 
     <div class="settings-section">
+      <h4>App icon badge</h4>
+      <p class="field-hint">Shows a count on the app icon for anyone due today or overdue. Only updates when you open the app - it can't check in the background. Works on iPhone/iPad (installed to the home screen) and desktop browsers; Android doesn't support this yet.</p>
+      <button type="button" id="badge-toggle-btn" class="btn btn-ghost-outline settings-full-btn">
+        <span id="badge-toggle-label">Turn on app icon badge</span>
+      </button>
+    </div>
+
+    <div class="settings-section">
       <h4>Backup &amp; sync</h4>
       <p class="field-hint">Export a backup file to keep safe or move to another device, or import one to restore it.</p>
       <div class="settings-row">
@@ -1088,6 +1139,6 @@
   </div>
 </div>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

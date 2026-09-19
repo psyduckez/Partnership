@@ -21,7 +21,9 @@
     cycleEndDate: null,
     deferredUntilNewMonth: false,
     deferredMonthRange: null,
-    lastPromptedForEndDate: null
+    lastPromptedForEndDate: null,
+    givingSummaryCollapsed: false,
+    badgeEnabled: false
   };
   var pendingGivingTargetId = null; // id awaiting an amount from the giving modal
   var pendingGivingIsNewPartner = false;
@@ -45,6 +47,12 @@
         }
         if (parsed && typeof parsed.lastShuffleMonthIndex === "number") {
           settings.lastShuffleMonthIndex = parsed.lastShuffleMonthIndex;
+        }
+        if (parsed && typeof parsed.givingSummaryCollapsed === "boolean") {
+          settings.givingSummaryCollapsed = parsed.givingSummaryCollapsed;
+        }
+        if (parsed && typeof parsed.badgeEnabled === "boolean") {
+          settings.badgeEnabled = parsed.badgeEnabled;
         }
         if (parsed && (parsed.theme === "light" || parsed.theme === "dark")) {
           settings.theme = parsed.theme;
@@ -321,6 +329,7 @@
     renderGivingTable();
     renderNextUp();
     renderProgress();
+    updateAppBadge();
   }
 
   var swipeAnimating = false;
@@ -420,7 +429,18 @@
     });
   }
 
+  function applyGivingSummaryCollapsed() {
+    var el = document.getElementById("giving-summary");
+    var btn = document.getElementById("giving-summary-toggle");
+    if (!el || !btn) return;
+    el.classList.toggle("collapsed", settings.givingSummaryCollapsed);
+    var label = settings.givingSummaryCollapsed ? "Show summary" : "Hide summary";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+  }
+
   function renderGivingTable() {
+    applyGivingSummaryCollapsed();
     var tbody = document.getElementById("giving-tbody");
     var emptyEl = document.getElementById("giving-empty");
     var givers = partners.filter(function (p) { return p.giving; });
@@ -610,17 +630,28 @@
   // marking prayed sends them to the bottom of the prayed group (top of the
   // list stays ordered by "who was prayed for first"); un-praying sends them
   // to the top of the unprayed group, ready to come up again.
+  //
+  // Either direction changes how many people are still waiting to be prayed
+  // for, so - like adding or removing a partner - the remaining unprayed
+  // group's dates get redistributed across the cycle window to reflect the
+  // new count and order. A newly-prayed partner's own date is set to today,
+  // recording when they actually were prayed for (which is what puts them at
+  // the bottom of the prayed group, most-recent-first).
   function moveToPrayedBoundary(p, makePrayed) {
     partners = partners.filter(function (x) { return x.id !== p.id; });
     p.prayed = makePrayed;
+    if (makePrayed) {
+      p.scheduled = toISODate(todayAtMidnight());
+    }
     var insertIndex = partners.filter(function (x) { return x.prayed; }).length;
     partners.splice(insertIndex, 0, p);
+    recomputeSchedule();
   }
 
-  // Marking someone as prayed (or un-praying them) never touches their
-  // scheduled date - dates only change when a new cycle is started. It does
-  // move them: prayed partners collect at the top of the list in the order
-  // they were prayed for, everyone else stays below them.
+  // Marking someone as prayed (or un-praying them) moves them: prayed
+  // partners collect at the top of the list in the order they were prayed
+  // for, everyone else stays below them - and the remaining unprayed dates
+  // reshuffle to match (see moveToPrayedBoundary above).
   function togglePrayed(id, checked) {
     var p = findPartner(id);
     if (!p) return;
@@ -630,7 +661,7 @@
   }
 
   // Swiping the "Next up" card right marks that partner prayed for - same
-  // effect as ticking their Prayed checkbox, dates untouched.
+  // effect as ticking their Prayed checkbox.
   function markPrayedFromCard(id) {
     var p = findPartner(id);
     if (!p) return;
@@ -880,6 +911,66 @@
     openModal("install-modal");
   }
 
+  // ---------- app icon badge ----------
+  // Shows a count on the installed app's icon for partners due today or
+  // overdue. Honest limitations: there's no server behind this app, so it
+  // can only update the badge when the app is actually open (or reopened) -
+  // it can't wake up in the background to refresh itself overnight. Browser
+  // support is also inconsistent: it works on iOS/iPadOS 16.4+ (once
+  // notification permission is granted) and on desktop Chrome/Edge/Safari,
+  // but Android Chrome does not implement this API at all, so this won't do
+  // anything visible there regardless of the setting.
+  function dueTodayCount() {
+    var today = todayAtMidnight();
+    var count = 0;
+    partners.forEach(function (p) {
+      if (p.prayed || !p.scheduled) return;
+      var d = parseISODate(p.scheduled);
+      if (d && d.getTime() <= today.getTime()) count++;
+    });
+    return count;
+  }
+
+  function updateAppBadge() {
+    if (!settings.badgeEnabled) return;
+    if (!("setAppBadge" in navigator)) return;
+    try {
+      var count = dueTodayCount();
+      if (count > 0) {
+        navigator.setAppBadge(count).catch(function () {});
+      } else {
+        navigator.clearAppBadge().catch(function () {});
+      }
+    } catch (e) {
+      // Not installed, insecure context, or permission not granted - ignore.
+    }
+  }
+
+  function clearAppBadgeIfSupported() {
+    if (!("clearAppBadge" in navigator)) return;
+    try { navigator.clearAppBadge().catch(function () {}); } catch (e) { /* ignore */ }
+  }
+
+  function setBadgeEnabled(enabled) {
+    settings.badgeEnabled = enabled;
+    saveSettings();
+    if (enabled) {
+      // iOS requires notification permission before a badge will actually
+      // show, even though we're not sending notifications ourselves.
+      if (typeof Notification !== "undefined" && Notification.requestPermission) {
+        try {
+          Notification.requestPermission().then(function () { updateAppBadge(); });
+        } catch (e) {
+          updateAppBadge();
+        }
+      } else {
+        updateAppBadge();
+      }
+    } else {
+      clearAppBadgeIfSupported();
+    }
+  }
+
   // ---------- theme ----------
   function applyTheme(theme) {
     var resolved = theme === "dark" ? "dark" : "light";
@@ -954,11 +1045,15 @@
       settings.deferredUntilNewMonth = !!parsed.settings.deferredUntilNewMonth;
       settings.deferredMonthRange = [1, 2, 3].indexOf(parsed.settings.deferredMonthRange) !== -1 ? parsed.settings.deferredMonthRange : null;
       settings.lastPromptedForEndDate = typeof parsed.settings.lastPromptedForEndDate === "string" ? parsed.settings.lastPromptedForEndDate : null;
+      settings.givingSummaryCollapsed = !!parsed.settings.givingSummaryCollapsed;
+      settings.badgeEnabled = !!parsed.settings.badgeEnabled;
     }
     save();
     saveSettings();
     showImportExportMessage("Backup imported successfully.");
     document.getElementById("month-range").value = String(settings.monthRange);
+    document.getElementById("badge-toggle-label").textContent =
+      settings.badgeEnabled ? "Turn off app icon badge" : "Turn on app icon badge";
     applyTheme(settings.theme);
     render();
   }
@@ -988,6 +1083,8 @@
     missingSchedule.forEach(function (p) { assignFallbackDate(p); });
     if (rolled || missingSchedule.length > 0 || shuffled) save();
     document.getElementById("month-range").value = String(settings.monthRange);
+    document.getElementById("badge-toggle-label").textContent =
+      settings.badgeEnabled ? "Turn off app icon badge" : "Turn on app icon badge";
     render();
     initDragReorder();
     initNextUpSwipe();
@@ -1044,6 +1141,21 @@
     // theme toggle
     document.getElementById("theme-toggle-btn").addEventListener("click", function () {
       toggleTheme();
+    });
+
+    // app icon badge toggle
+    document.getElementById("badge-toggle-btn").addEventListener("click", function () {
+      var next = !settings.badgeEnabled;
+      setBadgeEnabled(next);
+      document.getElementById("badge-toggle-label").textContent =
+        next ? "Turn off app icon badge" : "Turn on app icon badge";
+    });
+
+    // giving summary collapse/expand
+    document.getElementById("giving-summary-toggle").addEventListener("click", function () {
+      settings.givingSummaryCollapsed = !settings.givingSummaryCollapsed;
+      saveSettings();
+      applyGivingSummaryCollapsed();
     });
 
     // install as app
@@ -1277,6 +1389,12 @@
         }
       });
     }
+
+    // Also refresh the app icon badge whenever the app is reopened/refocused,
+    // independent of service worker support.
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") updateAppBadge();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", init);
